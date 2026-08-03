@@ -3,7 +3,7 @@
   <Import Project="..\common.props" />
 
   <PropertyGroup>
-    <TargetFrameworks>net46;netstandard1.3;netcoreapp2.0;netcoreapp3.0;netcoreapp3.1</TargetFrameworks>
+    <TargetFrameworks>net472;netstandard2.0</TargetFrameworks>
     <Title>Bundler &amp; Minifier</Title>
     <PackageId>BuildBundlerMinifier</PackageId>
 
@@ -27,14 +27,10 @@
 
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Build.Framework" Version="15.1.0-*" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="15.1.0-*" PrivateAssets="All" />
-    <PackageReference Include="Newtonsoft.Json" Version="9.0.1" PrivateAssets="All" />
-    <PackageReference Include="NUglify" Version="1.13.10" PrivateAssets="All" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.3'">
-    <PackageReference Include="System.IO.FileSystem.Watcher" Version="4.0.0" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.8.43" PrivateAssets="All" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.8.43" PrivateAssets="All" ExcludeAssets="runtime" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" PrivateAssets="All" />
+    <PackageReference Include="NUglify" Version="1.22.3" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

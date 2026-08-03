@@ -209,7 +209,8 @@ namespace BundlerMinifierTest
 
             string jsResult = File.ReadAllText("../../../artifacts/test8.min.js");
 
-            Assert.AreEqual("function test(n){for(const t of n)console.log(t)}test([1,2,3,4]);", jsResult);
+            // NUglify 1.22+ also terminates the final statement inside a block when TermSemicolons is on.
+            Assert.AreEqual("function test(n){for(const t of n)console.log(t);}test([1,2,3,4]);", jsResult);
         }
 
         [TestMethod]

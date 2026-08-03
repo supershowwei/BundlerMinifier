@@ -13,6 +13,34 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.0
+
+**Breaking:** this version targets Visual Studio 2022 and Visual Studio 2026 only.
+Users on Visual Studio 2015, 2017 or 2019 must stay on 3.2.x.
+
+- [x] Visual Studio 2022 (17.x) and Visual Studio 2026 (18.x) support
+  - Install target is now `[17.0,)` with `amd64` and `arm64` product architectures
+  - Extension assembly builds as AnyCPU (x86 cannot load in the 64-bit VS process)
+  - Migrated from the VS 2015 reference assemblies to the `Microsoft.VisualStudio.SDK` NuGet metapackage
+  - `packages.config` replaced with `PackageReference`
+- [x] Updated NUglify to 1.22.3, which fixes CSS parse errors on modern syntax
+  - `@supports selector(...)` and `@supports not selector(...)`
+  - `:has()` with combinators, e.g. `:has(> img)`
+  - CSS nesting (`&`)
+  - Media query range syntax, e.g. `@media (400px <= width <= 700px)`
+- [x] Target frameworks modernised
+  - `BuildBundlerMinifier` MSBuild task: `net472` + `netstandard2.0`
+    (was `net46` + `netstandard1.3`; the `tools\` folder layout changed accordingly)
+  - `BundlerMinifier.Core`: `net472` + `netstandard2.0` + `net8.0`
+  - `BundlerMinifier.TagHelpers`: `netstandard2.0` + `net8.0`
+- [x] Newtonsoft.Json updated to 13.0.3 to match the version Visual Studio ships
+- [x] Removed vendored binaries in favour of NuGet packages
+  (`lib\Microsoft.VisualStudio.TaskRunnerExplorer.14.0.dll`, `Newtonsoft.JSON.dll`)
+
+Note: NUglify 1.22 emits a trailing semicolon on the final statement inside a block
+when `termSemicolons` is enabled, so minified JavaScript output can differ by a byte
+or two from 3.2.x. Output remains semantically identical.
+
 ## 2.4
 
 - [x] .csproj based ASP.NET Core apps support bundle-on-build

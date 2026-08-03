@@ -1,5 +1,8 @@
 packages
 
+# Release output (anchored so src/BundlerMinifierTest/artifacts is unaffected)
+/artifacts/
+
 # User files
 *.suo
 *.user
