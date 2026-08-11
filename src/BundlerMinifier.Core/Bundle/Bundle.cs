@@ -30,6 +30,9 @@ namespace BundlerMinifier
         [JsonProperty("sourceMapRootPath")]
         public string SourceMapRootPath { get; set; }
 
+        [JsonProperty("wrapInIife")]
+        public bool WrapInIife { get; set; }
+
         internal string Output { get; set; }
 
         internal bool IsMinificationEnabled
@@ -175,6 +178,12 @@ namespace BundlerMinifier
         {
             Bundle config = new Bundle();
             return IncludeInProject != config.IncludeInProject;
+        }
+
+        /// <summary>For the JSON.NET serializer</summary>
+        public bool ShouldSerializeWrapInIife()
+        {
+            return WrapInIife;
         }
 
         /// <summary>For the JSON.NET serializer</summary>

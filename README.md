@@ -105,6 +105,20 @@ file:
 "sourceMap": true
 ```
 
+### Wrap bundles in an IIFE
+
+JavaScript bundles can be wrapped in an immediately invoked function
+expression so the concatenated files don't leak variables into the
+global scope. The property is optional and is set per output file:
+
+```json
+"wrapInIife": true
+```
+
+The setting is ignored for CSS and HTML bundles. Note that `gulpfile.js`
+created by *Convert to Gulp* does not wrap anything, so a converted
+project will produce different output.
+
 ### Task Runner Explorer
 Get a quick overview of the files you've specified or execute a bundle
 directly in Task Runner Explorer.

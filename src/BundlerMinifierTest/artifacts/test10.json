@@ -1,0 +1,23 @@
+[
+  {
+    "outputFileName": "test10.js",
+    "inputFiles": [
+      "file1.js",
+      "file6.js"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "wrapInIife": true
+  },
+  {
+    "outputFileName": "test10.css",
+    "inputFiles": [
+      "file1.css"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "wrapInIife": true
+  }
+]

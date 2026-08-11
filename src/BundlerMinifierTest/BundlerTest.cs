@@ -41,6 +41,8 @@ namespace BundlerMinifierTest
             File.Delete("../../../artifacts/file4.min.html");
             File.Delete("../../../artifacts/test7.min.js");
             File.Delete("../../../artifacts/test8.min.js");
+            File.Delete("../../../artifacts/test10.js");
+            File.Delete("../../../artifacts/test10.css");
         }
 
         [TestMethod]
@@ -221,6 +223,24 @@ namespace BundlerMinifierTest
             string jsResult = File.ReadAllText("../../../artifacts/test9.min.js");
 
             Assert.AreEqual("function r(n,t){return n**t}let x=2**5.1,y=3**x,z=2**81,p=21;", jsResult);
+        }
+
+        [TestMethod]
+        public void WrapJavaScriptInIife()
+        {
+            _processor.Process(TEST_BUNDLE.Replace("test1", "test10"));
+
+            string jsResult = File.ReadAllText("../../../artifacts/test10.js");
+            Assert.IsTrue(jsResult.StartsWith("(function () {"));
+            Assert.IsTrue(jsResult.Contains("var file1 = 1;"));
+
+            // the last input file ends with a single-line comment, so the closing
+            // statement has to sit on a line of its own
+            Assert.IsTrue(jsResult.EndsWith("// trailing comment" + Environment.NewLine + "})();"));
+
+            // wrapInIife only applies to JavaScript
+            string cssResult = File.ReadAllText("../../../artifacts/test10.css");
+            Assert.IsFalse(cssResult.Contains("(function"));
         }
     }
 }

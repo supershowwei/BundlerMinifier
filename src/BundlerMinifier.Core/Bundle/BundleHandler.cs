@@ -116,8 +116,25 @@ namespace BundlerMinifier
                 }
             }
 
+            if (sb.Length > 0 && bundle.WrapInIife && IsJavaScript(bundle))
+            {
+                sb.Insert(0, "(function () {" + Environment.NewLine);
+
+                // the closing statement must start on a line of its own, or a
+                // single-line comment at the end of the bundle would swallow it
+                if (sb[sb.Length - 1] != '\n')
+                    sb.AppendLine();
+
+                sb.Append("})();");
+            }
+
             bundle.MostRecentWrite = mostRecentWrite;
             bundle.Output = sb.ToString();
+        }
+
+        private static bool IsJavaScript(Bundle bundle)
+        {
+            return Path.GetExtension(bundle.OutputFileName).Equals(".js", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool AdjustRelativePaths(Bundle bundle)
