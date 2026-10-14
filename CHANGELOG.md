@@ -13,6 +13,20 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.1
+
+- [x] Layouts: share preamble and postscript files across bundles
+  - A layout is an entry without `outputFileName`, keyed by its name,
+    with optional `preambles`, `postscripts` and a parent `layout`
+  - Bundles reference a layout with the `layout` property
+  - Nested layouts wrap each other, the outermost layout's files come first and last
+  - Undefined, duplicate or circular layout references make the configuration file invalid
+  - Adding or removing a bundle from Visual Studio keeps the layout definitions
+- [x] `wrapInIife` option wraps a JavaScript bundle in an immediately invoked function expression
+  - Ignored for CSS and HTML bundles
+
+Neither option is supported by `gulpfile.js` created by *Convert to Gulp*.
+
 ## 4.0
 
 **Breaking:** this version targets Visual Studio 2022 and Visual Studio 2026 only.
