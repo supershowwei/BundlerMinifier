@@ -101,7 +101,7 @@ namespace BundlerMinifierVsix
 
                     foreach (Bundle bundle in bundles)
                     {
-                        if (bundle.InputFiles.Count == 1 && bundle.InputFiles.First() == bundle.OutputFileName && !fileName.Contains(".min.") && !fileName.Contains(".map"))
+                        if (bundle.AllInputFiles.Count() == 1 && bundle.AllInputFiles.First() == bundle.OutputFileName && !fileName.Contains(".min.") && !fileName.Contains(".map"))
                             continue;
 
                         if (bundle.GetAbsoluteOutputFile().Equals(normalizedFilePath, StringComparison.OrdinalIgnoreCase))

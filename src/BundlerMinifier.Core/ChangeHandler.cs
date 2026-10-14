@@ -25,8 +25,8 @@ namespace BundlerMinifier
         {
             return other != null
                 && string.Equals(_bundle.OutputFileName, other._bundle.OutputFileName, StringComparison.Ordinal)
-                && _bundle.InputFiles.Count == other._bundle.InputFiles.Count
-                && SetCompare(_bundle.InputFiles, other._bundle.InputFiles, StringComparer.Ordinal)
+                && _bundle.AllInputFiles.Count() == other._bundle.AllInputFiles.Count()
+                && SetCompare(_bundle.AllInputFiles, other._bundle.AllInputFiles, StringComparer.Ordinal)
                 && string.Equals(_bundle.SourceMapRootPath, other._bundle.SourceMapRootPath, StringComparison.Ordinal)
                 && _bundle.SourceMap == other._bundle.SourceMap
                 && SetCompare(_bundle.Minify, other._bundle.Minify, (l, r) => string.Equals(l.Key, r.Key, StringComparison.Ordinal) && Equals(l.Value, r.Value));

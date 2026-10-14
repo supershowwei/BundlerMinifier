@@ -43,6 +43,7 @@ namespace BundlerMinifierTest
             File.Delete("../../../artifacts/test8.min.js");
             File.Delete("../../../artifacts/test10.js");
             File.Delete("../../../artifacts/test10.css");
+            File.Delete("../../../artifacts/test11.js");
         }
 
         [TestMethod]
@@ -241,6 +242,71 @@ namespace BundlerMinifierTest
             // wrapInIife only applies to JavaScript
             string cssResult = File.ReadAllText("../../../artifacts/test10.css");
             Assert.IsFalse(cssResult.Contains("(function"));
+        }
+
+        [TestMethod]
+        public void GetBundlesWithLayout()
+        {
+            var bundles = BundleHandler.GetBundles(TEST_BUNDLE.Replace("test1", "test11"));
+            Assert.AreEqual(1, bundles.Count());
+
+            // the outer layout wraps the inner one, which wraps the bundle's own input files
+            var bundle = bundles.Single();
+            CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js", "minify.js", "file6.js" }, bundle.AllInputFiles.ToList());
+            CollectionAssert.AreEqual(new[] { "file4.js" }, bundle.InputFiles);
+        }
+
+        [TestMethod]
+        public void ProcessWithLayout()
+        {
+            _processor.Process(TEST_BUNDLE.Replace("test1", "test11"));
+
+            string jsResult = File.ReadAllText("../../../artifacts/test11.js");
+            int[] positions = new[] { "var file1", "var file2", "function test", "var o2", "var file6" }
+                .Select(s => jsResult.IndexOf(s, StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.IsTrue(positions.All(p => p > -1));
+            CollectionAssert.AreEqual(positions.OrderBy(p => p).ToArray(), positions);
+        }
+
+        [TestMethod]
+        public void AddBundlePreservesLayouts()
+        {
+            var bundle = new Bundle();
+            bundle.OutputFileName = _guid + ".js";
+            bundle.InputFiles.Add("file1.js");
+            bundle.Layout = "_outer";
+
+            string filePath = "../../../artifacts/" + _guid + ".json";
+            File.Copy(TEST_BUNDLE.Replace("test1", "test11"), filePath);
+            BundleHandler.AddBundle(filePath, bundle);
+
+            // layouts are resolved from the rewritten file, so they must have survived
+            var bundles = BundleHandler.GetBundles(filePath);
+            Assert.AreEqual(2, bundles.Count());
+            Assert.AreEqual(5, bundles.Single(b => b.OutputFileName == "test11.js").AllInputFiles.Count());
+
+            var added = bundles.Single(b => b.OutputFileName == bundle.OutputFileName);
+            Assert.AreEqual("_outer", added.Layout);
+            CollectionAssert.AreEqual(new[] { "file1.js", "file1.js", "file6.js" }, added.AllInputFiles.ToList());
+
+            BundleHandler.RemoveBundle(filePath, added);
+            bundles = BundleHandler.GetBundles(filePath);
+            Assert.AreEqual(1, bundles.Count());
+            Assert.AreEqual(5, bundles.Single().AllInputFiles.Count());
+        }
+
+        [TestMethod]
+        public void InvalidLayoutReference()
+        {
+            string filePath = "../../../artifacts/" + _guid + ".json";
+
+            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_missing\" }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _));
+
+            File.WriteAllText(filePath, "[{ \"_a\": { \"layout\": \"_b\" }, \"_b\": { \"layout\": \"_a\" } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_a\" }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _));
         }
     }
 }

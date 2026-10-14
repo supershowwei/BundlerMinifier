@@ -12,13 +12,9 @@ namespace BundlerMinifier
     {
         public static void AddBundle(string configFile, Bundle newBundle)
         {
-            IEnumerable<Bundle> existing = GetBundles(configFile)
-                .Where(x => !x.OutputFileName.Equals(newBundle.OutputFileName));
-
-            List<Bundle> bundles = new List<Bundle>();
-
-            bundles.AddRange(existing);
-            bundles.Add(newBundle);
+            List<object> entries = ReadConfigEntries(configFile);
+            entries.RemoveAll(x => x is Bundle bundle && bundle.OutputFileName.Equals(newBundle.OutputFileName));
+            entries.Add(newBundle);
             newBundle.FileName = configFile;
 
             JsonSerializerSettings settings = new JsonSerializerSettings()
@@ -27,21 +23,37 @@ namespace BundlerMinifier
                 DefaultValueHandling = DefaultValueHandling.Ignore,
             };
 
-            string content = JsonConvert.SerializeObject(bundles, settings);
+            string content = JsonConvert.SerializeObject(entries, settings);
             File.WriteAllText(configFile, content + Environment.NewLine);
         }
 
         public static void RemoveBundle(string configFile, Bundle bundleToRemove)
         {
-            IEnumerable<Bundle> bundles = GetBundles(configFile);
-            List<Bundle> newBundles = new List<Bundle>();
+            List<object> entries = ReadConfigEntries(configFile);
 
-            if (bundles.Contains(bundleToRemove))
+            if (entries.RemoveAll(e => bundleToRemove.Equals(e)) > 0)
             {
-                newBundles.AddRange(bundles.Where(b => !b.Equals(bundleToRemove)));
-                string content = JsonConvert.SerializeObject(newBundles, Formatting.Indented);
+                string content = JsonConvert.SerializeObject(entries, Formatting.Indented);
                 File.WriteAllText(configFile, content);
             }
+        }
+
+        /// <summary>
+        /// Reads the config as bundles, keeping layout entries as raw JSON so rewriting the file preserves them.
+        /// </summary>
+        private static List<object> ReadConfigEntries(string configFile)
+        {
+            List<object> entries = new List<object>();
+
+            if (!File.Exists(configFile))
+                return entries;
+
+            foreach (JToken entry in JArray.Parse(File.ReadAllText(configFile)))
+            {
+                entries.Add(BundleLayout.IsLayoutEntry(entry) ? (object)entry : entry.ToObject<Bundle>());
+            }
+
+            return entries;
         }
 
         public static bool TryGetBundles(string configFile, out IEnumerable<Bundle> bundles)
@@ -56,12 +68,30 @@ namespace BundlerMinifier
 
                 configFile = new FileInfo(configFile).FullName;
                 string content = File.ReadAllText(configFile);
-                bundles = JArray.Parse(content).ToObject<Bundle[]>();
+                var layouts = new Dictionary<string, BundleLayout>(StringComparer.Ordinal);
+                var list = new List<Bundle>();
 
-                foreach (Bundle bundle in bundles)
+                foreach (JToken entry in JArray.Parse(content))
+                {
+                    if (BundleLayout.IsLayoutEntry(entry))
+                    {
+                        // throws on a duplicate layout name
+                        foreach (JProperty property in ((JObject)entry).Properties())
+                            layouts.Add(property.Name, property.Value.ToObject<BundleLayout>());
+                    }
+                    else
+                    {
+                        list.Add(entry.ToObject<Bundle>());
+                    }
+                }
+
+                foreach (Bundle bundle in list)
                 {
                     bundle.FileName = configFile;
+                    BundleLayout.Apply(bundle, layouts);
                 }
+
+                bundles = list.ToArray();
 
                 return true;
             }

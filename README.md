@@ -119,6 +119,50 @@ The setting is ignored for CSS and HTML bundles. Note that `gulpfile.js`
 created by *Convert to Gulp* does not wrap anything, so a converted
 project will produce different output.
 
+### Layouts
+
+Files shared by many bundles can be defined once in a layout and
+referenced by name. A layout is an entry in `bundleconfig.json` without
+an `outputFileName`, keyed by the layout name:
+
+```json
+[
+  {
+    "_layout": {
+      "preambles": [ "wwwroot/js/common.js" ],
+      "postscripts": []
+    }
+  },
+  {
+    "_main-layout": {
+      "layout": "_layout",
+      "preambles": [ "wwwroot/js/_main-layout.js" ],
+      "postscripts": [ "wwwroot/js/advertisement.js" ]
+    }
+  },
+  {
+    "outputFileName": "wwwroot/js/polyfill.min.js",
+    "inputFiles": [ "wwwroot/js/polyfill.js" ],
+    "layout": "_main-layout"
+  }
+]
+```
+
+The `preambles` are bundled before the `inputFiles` and the `postscripts`
+after them. A layout can reference another layout, in which case the outer
+layout wraps the inner one, so the bundle above is built from:
+
+1. `wwwroot/js/common.js` (`_layout` preambles)
+2. `wwwroot/js/_main-layout.js` (`_main-layout` preambles)
+3. `wwwroot/js/polyfill.js` (`inputFiles`)
+4. `wwwroot/js/advertisement.js` (`_main-layout` postscripts)
+
+Layout files support the same globbing and `!` exclusion patterns as
+`inputFiles`. Referencing an undefined layout, defining the same layout
+name twice or a circular layout reference makes the configuration file
+invalid. Layouts are not supported by `gulpfile.js` created by
+*Convert to Gulp*.
+
 ### Task Runner Explorer
 Get a quick overview of the files you've specified or execute a bundle
 directly in Task Runner Explorer.

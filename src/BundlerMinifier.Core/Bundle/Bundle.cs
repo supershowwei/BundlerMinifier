@@ -33,6 +33,26 @@ namespace BundlerMinifier
         [JsonProperty("wrapInIife")]
         public bool WrapInIife { get; set; }
 
+        [JsonProperty("layout")]
+        public string Layout { get; set; }
+
+        /// <summary>Files from the layout chain placed before the input files. Resolved when the config is read.</summary>
+        [JsonIgnore]
+        public List<string> LayoutPreambles { get; } = new List<string>();
+
+        /// <summary>Files from the layout chain placed after the input files. Resolved when the config is read.</summary>
+        [JsonIgnore]
+        public List<string> LayoutPostscripts { get; } = new List<string>();
+
+        /// <summary>
+        /// The input files including the ones contributed by the layout, in bundling order.
+        /// </summary>
+        [JsonIgnore]
+        public IEnumerable<string> AllInputFiles
+        {
+            get { return LayoutPreambles.Concat(InputFiles).Concat(LayoutPostscripts); }
+        }
+
         internal string Output { get; set; }
 
         internal bool IsMinificationEnabled
@@ -75,15 +95,16 @@ namespace BundlerMinifier
         public List<string> GetAbsoluteInputFiles(bool notifyOnPatternMiss = false)
         {
             List<string> files = new List<string>();
+            List<string> inputFiles = AllInputFiles.ToList();
 
-            if (!InputFiles.Any())
+            if (!inputFiles.Any())
                 return files;
 
             string folder = new DirectoryInfo(Path.GetDirectoryName(FileName)).FullName;
-            string ext = Path.GetExtension(InputFiles.First());
+            string ext = Path.GetExtension(inputFiles.First());
             Options options = new Options { AllowWindowsPaths = true };
 
-            foreach (string inputFile in InputFiles.Where(f => !f.StartsWith("!", StringComparison.Ordinal)))
+            foreach (string inputFile in inputFiles.Where(f => !f.StartsWith("!", StringComparison.Ordinal)))
             {
                 int globIndex = inputFile.IndexOf('*');
 
@@ -142,7 +163,7 @@ namespace BundlerMinifier
             }
 
             // Remove files starting with a !
-            foreach (string inputFile in InputFiles)
+            foreach (string inputFile in inputFiles)
             {
                 int globIndex = inputFile.IndexOf('!');
 
@@ -184,6 +205,12 @@ namespace BundlerMinifier
         public bool ShouldSerializeWrapInIife()
         {
             return WrapInIife;
+        }
+
+        /// <summary>For the JSON.NET serializer</summary>
+        public bool ShouldSerializeLayout()
+        {
+            return !string.IsNullOrEmpty(Layout);
         }
 
         /// <summary>For the JSON.NET serializer</summary>

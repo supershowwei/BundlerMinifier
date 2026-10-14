@@ -48,7 +48,10 @@ gulp.task("min:html", function () {
 });
 
 gulp.task("clean", function () {
-    var files = bundleconfig.map(function (bundle) {
+    // layout entries have no outputFileName
+    var files = bundleconfig.filter(function (bundle) {
+        return bundle.outputFileName;
+    }).map(function (bundle) {
         return bundle.outputFileName;
     });
 

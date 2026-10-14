@@ -1,0 +1,33 @@
+[
+  {
+    "_outer": {
+      "preambles": [
+        "file1.js"
+      ],
+      "postscripts": [
+        "file6.js"
+      ]
+    }
+  },
+  {
+    "_inner": {
+      "layout": "_outer",
+      "preambles": [
+        "file2.js"
+      ],
+      "postscripts": [
+        "minify.js"
+      ]
+    }
+  },
+  {
+    "outputFileName": "test11.js",
+    "inputFiles": [
+      "file4.js"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner"
+  }
+]
