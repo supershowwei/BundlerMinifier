@@ -13,7 +13,7 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
-## 4.1
+## 4.2
 
 - [x] Layouts: share preamble and postscript files across bundles
   - A layout is an entry without `outputFileName`, keyed by its name,
@@ -22,10 +22,15 @@ on the official Visual Studio extension gallery
   - Nested layouts wrap each other, the outermost layout's files come first and last
   - Undefined, duplicate or circular layout references make the configuration file invalid
   - Adding or removing a bundle from Visual Studio keeps the layout definitions
+
+Layouts are not supported by `gulpfile.js` created by *Convert to Gulp*.
+
+## 4.1
+
 - [x] `wrapInIife` option wraps a JavaScript bundle in an immediately invoked function expression
   - Ignored for CSS and HTML bundles
 
-Neither option is supported by `gulpfile.js` created by *Convert to Gulp*.
+The option is not supported by `gulpfile.js` created by *Convert to Gulp*.
 
 ## 4.0
 

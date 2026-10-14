@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Version>4.1.0</Version>
+    <Version>4.2.0</Version>
     <Copyright>Copyright 2017</Copyright>
     <Authors>Mads Kristensen</Authors>
     <Description>Bundles and minifies CSS, JS and HTML files</Description>
