@@ -130,32 +130,51 @@ an `outputFileName`, keyed by the layout name:
   {
     "_layout": {
       "preambles": [ "wwwroot/js/common.js" ],
-      "postscripts": []
+      "postscripts": [],
+      "styles": [ "wwwroot/css/common.css" ]
     }
   },
   {
     "_main-layout": {
       "layout": "_layout",
       "preambles": [ "wwwroot/js/_main-layout.js" ],
-      "postscripts": [ "wwwroot/js/advertisement.js" ]
+      "postscripts": [ "wwwroot/js/advertisement.js" ],
+      "styles": [ "wwwroot/css/_main-layout.css" ]
     }
   },
   {
     "outputFileName": "wwwroot/js/polyfill.min.js",
     "inputFiles": [ "wwwroot/js/polyfill.js" ],
     "layout": "_main-layout"
+  },
+  {
+    "outputFileName": "wwwroot/css/polyfill.min.css",
+    "inputFiles": [ "wwwroot/css/polyfill.css" ],
+    "layout": "_main-layout"
   }
 ]
 ```
 
-The `preambles` are bundled before the `inputFiles` and the `postscripts`
-after them. A layout can reference another layout, in which case the outer
-layout wraps the inner one, so the bundle above is built from:
+Which files a layout contributes depends on the extension of the
+`outputFileName`. JavaScript bundles use `preambles` and `postscripts`,
+CSS bundles use `styles`, and other bundles take no files from layouts.
+
+For JavaScript bundles the `preambles` are bundled before the `inputFiles`
+and the `postscripts` after them. A layout can reference another layout,
+in which case the outer layout wraps the inner one, so the JavaScript
+bundle above is built from:
 
 1. `wwwroot/js/common.js` (`_layout` preambles)
 2. `wwwroot/js/_main-layout.js` (`_main-layout` preambles)
 3. `wwwroot/js/polyfill.js` (`inputFiles`)
 4. `wwwroot/js/advertisement.js` (`_main-layout` postscripts)
+
+For CSS bundles the `styles` are only stacked, from the outermost layout
+inwards, before the `inputFiles`. The CSS bundle above is built from:
+
+1. `wwwroot/css/common.css` (`_layout` styles)
+2. `wwwroot/css/_main-layout.css` (`_main-layout` styles)
+3. `wwwroot/css/polyfill.css` (`inputFiles`)
 
 Layout files support the same globbing and `!` exclusion patterns as
 `inputFiles`. Referencing an undefined layout, defining the same layout

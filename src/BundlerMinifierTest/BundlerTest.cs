@@ -44,6 +44,8 @@ namespace BundlerMinifierTest
             File.Delete("../../../artifacts/test10.js");
             File.Delete("../../../artifacts/test10.css");
             File.Delete("../../../artifacts/test11.js");
+            File.Delete("../../../artifacts/test12.css");
+            File.Delete("../../../artifacts/test12.js");
         }
 
         [TestMethod]
@@ -268,6 +270,35 @@ namespace BundlerMinifierTest
 
             Assert.IsTrue(positions.All(p => p > -1));
             CollectionAssert.AreEqual(positions.OrderBy(p => p).ToArray(), positions);
+        }
+
+        [TestMethod]
+        public void GetBundlesWithLayoutStyles()
+        {
+            var bundles = BundleHandler.GetBundles(TEST_BUNDLE.Replace("test1", "test12"));
+
+            // CSS bundle 只疊加 styles，由外層 layout 往內，再接 bundle 自己的 inputFiles
+            var css = bundles.Single(b => b.OutputFileName == "test12.css");
+            CollectionAssert.AreEqual(new[] { "file1.css", "test2/foo.css", "file2.css" }, css.AllInputFiles.ToList());
+
+            // JS bundle 不會拿到 styles
+            var js = bundles.Single(b => b.OutputFileName == "test12.js");
+            CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js" }, js.AllInputFiles.ToList());
+        }
+
+        [TestMethod]
+        public void ProcessWithLayoutStyles()
+        {
+            _processor.Process(TEST_BUNDLE.Replace("test1", "test12"));
+
+            string cssResult = File.ReadAllText("../../../artifacts/test12.css");
+            int[] positions = new[] { "url('/test.png')", "test2/image.png?foo=hat", "display: block" }
+                .Select(s => cssResult.IndexOf(s, StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.IsTrue(positions.All(p => p > -1));
+            CollectionAssert.AreEqual(positions.OrderBy(p => p).ToArray(), positions);
+            Assert.IsFalse(cssResult.Contains("var file"));
         }
 
         [TestMethod]

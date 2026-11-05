@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -20,6 +21,10 @@ namespace BundlerMinifier
         [JsonProperty("postscripts")]
         public List<string> Postscripts { get; } = new List<string>();
 
+        /// <summary>CSS bundle 用的樣式檔，沿著 layout 鏈由外往內疊加，不分前後包。</summary>
+        [JsonProperty("styles")]
+        public List<string> Styles { get; } = new List<string>();
+
         /// <summary>
         /// A layout entry is an object without an outputFileName whose properties are all objects,
         /// each property being the definition of a layout keyed by its name.
@@ -35,13 +40,18 @@ namespace BundlerMinifier
         }
 
         /// <summary>
-        /// Fills the layout preambles and postscripts of the bundle by walking up its layout chain.
-        /// The outermost layout wraps everything, so its preambles come first and its postscripts last.
+        /// 沿著 bundle 的 layout 鏈往外走，依輸出檔類型填入 layout 提供的檔案：
+        /// JS bundle 由外層 layout 包住內層，最外層的 preambles 最先、postscripts 最後；
+        /// CSS bundle 只把 styles 由外往內疊加在 inputFiles 之前；其他類型不套用 layout 檔案。
         /// </summary>
         internal static void Apply(Bundle bundle, IDictionary<string, BundleLayout> layouts)
         {
             bundle.LayoutPreambles.Clear();
             bundle.LayoutPostscripts.Clear();
+
+            string extension = Path.GetExtension(bundle.OutputFileName);
+            bool isJavaScript = string.Equals(extension, ".js", StringComparison.OrdinalIgnoreCase);
+            bool isCss = string.Equals(extension, ".css", StringComparison.OrdinalIgnoreCase);
 
             var visited = new List<string>();
             string name = bundle.Layout;
@@ -57,8 +67,17 @@ namespace BundlerMinifier
                     throw new InvalidOperationException($"The layout \"{name}\" referenced by {bundle.OutputFileName} is not defined");
 
                 visited.Add(name);
-                bundle.LayoutPreambles.InsertRange(0, layout.Preambles);
-                bundle.LayoutPostscripts.AddRange(layout.Postscripts);
+
+                if (isJavaScript)
+                {
+                    bundle.LayoutPreambles.InsertRange(0, layout.Preambles);
+                    bundle.LayoutPostscripts.AddRange(layout.Postscripts);
+                }
+                else if (isCss)
+                {
+                    bundle.LayoutPreambles.InsertRange(0, layout.Styles);
+                }
+
                 name = layout.Layout;
             }
         }

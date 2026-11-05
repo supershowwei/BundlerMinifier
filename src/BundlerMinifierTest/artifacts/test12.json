@@ -1,0 +1,45 @@
+[
+  {
+    "_outer": {
+      "preambles": [
+        "file1.js"
+      ],
+      "postscripts": [],
+      "styles": [
+        "file1.css"
+      ]
+    }
+  },
+  {
+    "_inner": {
+      "layout": "_outer",
+      "preambles": [
+        "file2.js"
+      ],
+      "postscripts": [],
+      "styles": [
+        "test2/foo.css"
+      ]
+    }
+  },
+  {
+    "outputFileName": "test12.css",
+    "inputFiles": [
+      "file2.css"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner"
+  },
+  {
+    "outputFileName": "test12.js",
+    "inputFiles": [
+      "file4.js"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner"
+  }
+]
