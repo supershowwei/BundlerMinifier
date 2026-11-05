@@ -13,6 +13,15 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.3
+
+- [x] Layouts can provide `styles` for CSS bundles
+  - Styles are only stacked, from the outermost layout inwards, before the `inputFiles`
+  - Which layout files apply now depends on the output file extension:
+    JavaScript bundles use `preambles` and `postscripts`, CSS bundles use `styles`
+    and other bundles take no files from layouts
+  - Fixed CSS and HTML bundles with a `layout` receiving the JavaScript `preambles` and `postscripts`
+
 ## 4.2
 
 - [x] Layouts: share preamble and postscript files across bundles
