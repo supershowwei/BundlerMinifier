@@ -237,6 +237,9 @@ namespace BundlerMinifier
             processor.BeforeWritingSourceMap += (s, e) => { FileHelpers.RemoveReadonlyFlagFromFile(e.ResultFile); };
             processor.AfterWritingSourceMap += (s, e) => { Console.WriteLine($"  Sourcemapped".Green().Bright()); };
 
+            string configFullPath = new FileInfo(configPath).FullName;
+            processor.AfterDeletingMinFile += (s, e) => { Console.WriteLine($"  Deleted {FileHelpers.MakeRelative(configFullPath, e.ResultFile)}".Orange().Bright()); };
+
             BundleMinifier.BeforeWritingMinFile += (s, e) => { FileHelpers.RemoveReadonlyFlagFromFile(e.ResultFile); };
             BundleMinifier.AfterWritingMinFile += (s, e) => { Console.WriteLine($"  Minified".Green().Bright()); };
             BundleMinifier.BeforeWritingGzipFile += (s, e) => { FileHelpers.RemoveReadonlyFlagFromFile(e.ResultFile); };

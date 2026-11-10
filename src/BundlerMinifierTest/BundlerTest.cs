@@ -282,6 +282,72 @@ namespace BundlerMinifierTest
             Assert.AreEqual("stale", File.ReadAllText(minFile));
         }
 
+        [TestMethod]
+        public void DeleteMinFileWhenInputFilesAreEmptied()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.js";
+
+            File.WriteAllText(config, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\", \"file2.js\"], \"sourceMap\": true }]");
+            _processor.Process(config);
+            Assert.IsTrue(File.Exists(minFile));
+            Assert.IsTrue(File.Exists(minFile + ".map"));
+
+            File.WriteAllText(config, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [], \"sourceMap\": true }]");
+            Assert.IsTrue(_processor.Process(config));
+            Assert.IsFalse(File.Exists(minFile));
+            Assert.IsFalse(File.Exists(minFile + ".map"));
+            Assert.AreEqual(string.Empty, File.ReadAllText("../../../artifacts/foo.js"));
+
+            // nothing is left to delete
+            Assert.IsFalse(_processor.Process(config));
+        }
+
+        [TestMethod]
+        public void DeleteMinFileWhenBundleIsRemoved()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            DateTime written = DateTime.UtcNow;
+
+            File.WriteAllText(config, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\", \"file2.js\"] },"
+                + " { \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"] }]");
+            File.SetLastWriteTimeUtc(config, written);
+            _processor.Process(config);
+            Assert.IsTrue(File.Exists("../../../artifacts/foo.min.css"));
+
+            WriteConfig(config, written.AddSeconds(1), "file1.js", "file2.js");
+            Assert.IsTrue(_processor.Process(config));
+
+            // only the min file goes, and only the one of the removed bundle
+            Assert.IsFalse(File.Exists("../../../artifacts/foo.min.css"));
+            Assert.IsTrue(File.Exists("../../../artifacts/foo.css"));
+            Assert.IsTrue(File.Exists("../../../artifacts/foo.min.js"));
+        }
+
+        [TestMethod]
+        public void KeepMinFileThatAnotherBundleStillProduces()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.js";
+            DateTime written = DateTime.UtcNow;
+
+            int deleted = 0;
+            _processor.AfterDeletingMinFile += (s, e) => deleted++;
+
+            WriteConfig(config, written, "file1.js", "file2.js");
+            BundleFileProcessor.TrackInputFiles(config);
+            _processor.Process(config);
+
+            // foo.js is gone from the config file, but its min file is now the output of the bundle replacing it
+            File.WriteAllText(config, "[{ \"outputFileName\": \"foo.min.js\", \"inputFiles\": [\"file1.js\"] }]");
+            File.SetLastWriteTimeUtc(config, written.AddSeconds(1));
+            _processor.Process(config);
+
+            Assert.AreEqual(0, deleted);
+            Assert.IsTrue(File.ReadAllText(minFile).StartsWith("var file1=1"));
+            Assert.IsFalse(File.ReadAllText(minFile).Contains("file2"));
+        }
+
         private static void WriteConfig(string configFile, DateTime writeTime, params string[] inputFiles)
         {
             string inputs = string.Join(", ", inputFiles.Select(f => "\"" + f + "\""));

@@ -32,8 +32,16 @@ namespace BundlerMinifier
         public bool Process(string fileName, IEnumerable<Bundle> bundles = null)
         {
             FileInfo info = new FileInfo(fileName);
-            bundles = bundles ?? BundleHandler.GetBundles(fileName);
             bool result = false;
+
+            if (bundles == null)
+            {
+                bundles = BundleHandler.GetBundles(fileName);
+
+                // With the whole config file at hand, a bundle remembered from an earlier read that is gone was removed from it
+                if (bundles != null)
+                    result |= DeleteMinFilesOfRemovedBundles(info.FullName, bundles);
+            }
 
             foreach (Bundle bundle in bundles)
             {
@@ -41,6 +49,64 @@ namespace BundlerMinifier
             }
 
             return result;
+        }
+
+        private bool DeleteMinFilesOfRemovedBundles(string configFile, IEnumerable<Bundle> bundles)
+        {
+            List<string> removed = BundleInputTracker.TakeRemoved(configFile, bundles);
+
+            if (removed == null)
+                return false;
+
+            bool deleted = false;
+
+            foreach (string outputFileName in removed)
+            {
+                deleted |= DeleteMinFilesOfRemovedBundle(configFile, outputFileName, bundles);
+            }
+
+            return deleted;
+        }
+
+        /// <summary>
+        /// Deletes the min file of a bundle that was removed from the config file, along with its source map
+        /// and gzip file, unless a bundle that is still in the config file produces that very min file.
+        /// </summary>
+        /// <param name="bundles">The bundles that are in the config file now.</param>
+        internal bool DeleteMinFilesOfRemovedBundle(string configFile, string outputFileName, IEnumerable<Bundle> bundles)
+        {
+            string folder = new FileInfo(configFile).DirectoryName;
+            string minFile = BundleMinifier.GetMinFileName(Path.Combine(folder, outputFileName.NormalizePath()));
+
+            foreach (Bundle bundle in bundles)
+            {
+                if (minFile.Equals(BundleMinifier.GetMinFileName(bundle.GetAbsoluteOutputFile()), StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            return DeleteMinFiles(minFile);
+        }
+
+        private bool DeleteMinFiles(string minFile)
+        {
+            bool deleted = DeleteFile(minFile, minFile);
+
+            deleted |= DeleteFile(minFile, minFile + ".map");
+            deleted |= DeleteFile(minFile, minFile + ".gz");
+
+            return deleted;
+        }
+
+        private bool DeleteFile(string minFile, string file)
+        {
+            if (!File.Exists(file))
+                return false;
+
+            FileHelpers.RemoveReadonlyFlagFromFile(file);
+            File.Delete(file);
+            OnAfterDeletingMinFile(minFile, file);
+
+            return true;
         }
 
         public void Clean(string fileName, IEnumerable<Bundle> bundles = null)
@@ -144,6 +210,19 @@ namespace BundlerMinifier
 
             MinificationResult minResult = null;
             var minFile = BundleMinifier.GetMinFileName(bundle.GetAbsoluteOutputFile());
+
+            // Without any input file there is nothing to minify, so what an earlier run left behind
+            // is deleted instead of being kept with its outdated content
+            if (bundle.IsMinificationEnabled && !bundle.HasInputFiles)
+            {
+                changed |= DeleteMinFiles(minFile);
+
+                if (trackInputFiles)
+                    BundleInputTracker.Commit(bundle, inputFilesHash);
+
+                return changed;
+            }
+
             if (bundle.IsMinificationEnabled)
             {
                 var outputWriteTime = File.GetLastWriteTimeUtc(minFile);
@@ -273,6 +352,16 @@ namespace BundlerMinifier
         protected void OnMinificationSkipped(Bundle bundle, string baseFolder, bool containsChanges)
         {
             MinificationSkipped?.Invoke(this, new BundleFileEventArgs(bundle.GetAbsoluteOutputFile(), bundle, baseFolder, containsChanges));
+        }
+
+        /// <summary>
+        /// Raised for a min file, its source map and its gzip file after each of them is deleted because
+        /// the bundle was removed from the config file or no longer has any input file.
+        /// </summary>
+        public event EventHandler<MinifyFileEventArgs> AfterDeletingMinFile;
+        protected void OnAfterDeletingMinFile(string minFile, string deletedFile)
+        {
+            AfterDeletingMinFile?.Invoke(this, new MinifyFileEventArgs(minFile, deletedFile, true));
         }
 
 

@@ -38,6 +38,7 @@ namespace BundlerMinifier
             BundleMinifier.BeforeWritingMinFile += (s, e) => { RemoveReadonlyFlagFromFile(e.ResultFile); };
             processor.BeforeWritingSourceMap += (s, e) => { RemoveReadonlyFlagFromFile(e.ResultFile); };
             processor.AfterWritingSourceMap += Processor_AfterWritingSourceMap;
+            processor.AfterDeletingMinFile += (s, e) => { Log.LogMessage(MessageImportance.High, "\tDeleted " + FileHelpers.MakeRelative(FileName, e.ResultFile)); };
             BundleMinifier.ErrorMinifyingFile += BundleMinifier_ErrorMinifyingFile;
             BundleMinifier.AfterWritingMinFile += FileMinifier_AfterWritingMinFile;
             processor.MinificationSkipped += (s, e) => { Log.LogMessage(MessageImportance.Normal, "Bundler: No changes, skipping minification of " + e.OutputFileName); };

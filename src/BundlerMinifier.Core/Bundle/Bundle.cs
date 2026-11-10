@@ -54,6 +54,14 @@ namespace BundlerMinifier
         }
 
         /// <summary>
+        /// False when neither the bundle nor its layout lists any input file.
+        /// </summary>
+        internal bool HasInputFiles
+        {
+            get { return LayoutPreambles.Count > 0 || InputFiles.Count > 0 || LayoutPostscripts.Count > 0; }
+        }
+
+        /// <summary>
         /// Last write time (UTC ticks) of the config file, taken right before its content was read.
         /// Zero when the bundle was not read from a config file.
         /// </summary>

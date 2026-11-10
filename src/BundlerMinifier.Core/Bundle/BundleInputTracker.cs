@@ -14,6 +14,9 @@ namespace BundlerMinifier
         {
             public long ConfigWriteTicks;
             public ulong Hash;
+
+            // 有啟用 minify 的 bundle 才會產生 min 檔，移除時才需要刪除
+            public bool Minified;
         }
 
         private sealed class ConfigState
@@ -23,6 +26,9 @@ namespace BundlerMinifier
 
             // 整份設定檔的 bundle 都記過基準之後才為 true，此後不在 Entries 裡的 bundle 就是新加入的
             public volatile bool Primed;
+
+            // 上次比對「哪些 bundle 被移除」時的設定檔修改時間
+            public long ReconciledTicks;
         }
 
         // 設定檔完整路徑 -> 該設定檔的狀態；兩層查詢都不需要另外組字串當 key
@@ -65,7 +71,74 @@ namespace BundlerMinifier
         /// </summary>
         public static void Commit(Bundle bundle, ulong hash)
         {
-            GetState(bundle.FileName).Entries[bundle.OutputFileName] = new Entry { ConfigWriteTicks = bundle.ConfigWriteTicks, Hash = hash };
+            GetState(bundle.FileName).Entries[bundle.OutputFileName] = NewEntry(bundle, hash);
+        }
+
+        /// <summary>
+        /// 找出記過基準、但已經不在設定檔裡的 bundle 並忘掉它們。
+        /// 設定檔修改時間與上次比對時相同就直接略過。
+        /// </summary>
+        /// <param name="configFile">設定檔完整路徑。</param>
+        /// <param name="bundles">設定檔裡的全部 bundle。</param>
+        /// <returns>被移除且先前有啟用 minify 的 outputFileName；沒有的話為 null。</returns>
+        public static List<string> TakeRemoved(string configFile, IEnumerable<Bundle> bundles)
+        {
+            ConfigState state;
+
+            // 這個行程還沒記過這份設定檔（例如單次執行），沒有東西可比對
+            if (!_configs.TryGetValue(configFile, out state))
+                return null;
+
+            long ticks = 0;
+
+            foreach (Bundle bundle in bundles)
+            {
+                ticks = bundle.ConfigWriteTicks;
+                break;
+            }
+
+            // 設定檔裡一個 bundle 都不剩時拿不到修改時間，一律比對
+            if (ticks != 0 && state.ReconciledTicks == ticks)
+                return null;
+
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Bundle bundle in bundles)
+            {
+                if (bundle.OutputFileName != null)
+                    names.Add(bundle.OutputFileName);
+            }
+
+            List<string> removed = null;
+
+            foreach (KeyValuePair<string, Entry> pair in state.Entries)
+            {
+                Entry entry;
+
+                if (names.Contains(pair.Key) || !state.Entries.TryRemove(pair.Key, out entry) || !entry.Minified)
+                    continue;
+
+                if (removed == null)
+                    removed = new List<string>();
+
+                removed.Add(pair.Key);
+            }
+
+            state.ReconciledTicks = ticks;
+
+            return removed;
+        }
+
+        /// <summary>
+        /// 忘掉已從設定檔移除的 bundle，之後再加回來會被視為新加入。
+        /// </summary>
+        public static void Forget(Bundle bundle)
+        {
+            ConfigState state;
+            Entry entry;
+
+            if (bundle.FileName != null && bundle.OutputFileName != null && _configs.TryGetValue(bundle.FileName, out state))
+                state.Entries.TryRemove(bundle.OutputFileName, out entry);
         }
 
         /// <summary>
@@ -86,12 +159,17 @@ namespace BundlerMinifier
                     state = GetState(bundle.FileName);
 
                 if (!state.Entries.ContainsKey(bundle.OutputFileName))
-                    state.Entries.TryAdd(bundle.OutputFileName, new Entry { ConfigWriteTicks = bundle.ConfigWriteTicks, Hash = bundle.ComputeInputFilesHash() });
+                    state.Entries.TryAdd(bundle.OutputFileName, NewEntry(bundle, bundle.ComputeInputFilesHash()));
             }
 
             // 全部記完才標記，避免其他執行緒把還沒記到的 bundle 誤判為新加入
             if (state != null)
                 state.Primed = true;
+        }
+
+        private static Entry NewEntry(Bundle bundle, ulong hash)
+        {
+            return new Entry { ConfigWriteTicks = bundle.ConfigWriteTicks, Hash = hash, Minified = bundle.IsMinificationEnabled };
         }
 
         private static ConfigState GetState(string configFile)

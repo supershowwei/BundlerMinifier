@@ -185,7 +185,7 @@ namespace BundlerMinifier
                     }
                     else
                     {
-                        ChangeHandlers.Remove(handler);
+                        RemoveHandler(handler, bundles);
                         Console.WriteLine($"Cannot find configuration {handler.Bundle.OutputFileName}".Orange().Bright());
                     }
                 }
@@ -211,6 +211,12 @@ namespace BundlerMinifier
                             anyChanges = true;
                         }
                     }
+                    else
+                    {
+                        // the bundle was removed from the config file, without this its input files would keep rebuilding it
+                        RemoveHandler(handler, bundles);
+                        anyChanges = true;
+                    }
                 }
 
                 foreach (Bundle bundle in bundlesToProcess)
@@ -222,6 +228,21 @@ namespace BundlerMinifier
             }
 
             return anyChanges;
+        }
+
+        /// <summary>
+        /// Stops watching a bundle that is no longer in the config file and deletes the min file it produced.
+        /// </summary>
+        /// <param name="bundles">The bundles that are in the config file now.</param>
+        private static void RemoveHandler(ChangeHandler handler, IEnumerable<Bundle> bundles)
+        {
+            Bundle removed = handler.Bundle;
+
+            ChangeHandlers.Remove(handler);
+            BundleInputTracker.Forget(removed);
+
+            if (removed.IsMinificationEnabled)
+                _processor.DeleteMinFilesOfRemovedBundle(removed.FileName, removed.OutputFileName, bundles);
         }
     }
 }
