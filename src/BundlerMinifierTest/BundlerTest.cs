@@ -247,6 +247,41 @@ namespace BundlerMinifierTest
             Assert.AreEqual(firstFileTime, File.GetLastWriteTimeUtc(minFile));
         }
 
+        [TestMethod]
+        public void MinifyBundleAddedToTrackedConfig()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.css";
+            DateTime written = DateTime.UtcNow;
+
+            WriteConfig(config, written, "file1.js", "file2.js");
+            BundleFileProcessor.TrackInputFiles(config);
+
+            // a left over min file that is newer than every input file of the bundle about to be added
+            File.WriteAllText(minFile, "stale");
+
+            File.WriteAllText(config, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\", \"file2.js\"] },"
+                + " { \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"] }]");
+            File.SetLastWriteTimeUtc(config, written.AddSeconds(1));
+
+            _processor.Process(config);
+            Assert.IsTrue(File.ReadAllText(minFile).StartsWith("body"));
+        }
+
+        [TestMethod]
+        public void NothingIsForcedWithoutTrackedConfig()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.js";
+
+            // a one-off run has nothing to compare against, forcing here would minify every bundle on every run
+            File.WriteAllText(minFile, "stale");
+            WriteConfig(config, DateTime.UtcNow, "file1.js", "file2.js");
+
+            _processor.Process(config);
+            Assert.AreEqual("stale", File.ReadAllText(minFile));
+        }
+
         private static void WriteConfig(string configFile, DateTime writeTime, params string[] inputFiles)
         {
             string inputs = string.Join(", ", inputFiles.Select(f => "\"" + f + "\""));
