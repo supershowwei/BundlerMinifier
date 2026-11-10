@@ -25,6 +25,9 @@ namespace BundlerMinifier
                 return false;
             }
 
+            // the baseline a later config change is compared against
+            BundleInputTracker.Prime(bundles);
+
             if (configurations.Count > 0)
             {
                 foreach (string config in configurations)

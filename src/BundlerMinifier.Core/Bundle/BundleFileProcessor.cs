@@ -70,6 +70,19 @@ namespace BundlerMinifier
             }
         }
 
+        /// <summary>
+        /// Remembers the inputFiles of the bundles as the config file has them now, so that a later
+        /// <see cref="Process"/> in this process can tell which bundles had their inputFiles changed.
+        /// Bundles that are already remembered are left untouched.
+        /// </summary>
+        public static void TrackInputFiles(string configFile)
+        {
+            IEnumerable<Bundle> bundles;
+
+            if (BundleHandler.TryGetBundles(configFile, out bundles))
+                BundleInputTracker.Prime(bundles);
+        }
+
         public static IEnumerable<Bundle> IsFileConfigured(string configFile, string sourceFile)
         {
             List<Bundle> list = new List<Bundle>();
@@ -102,6 +115,11 @@ namespace BundlerMinifier
             var inputs = bundle.GetAbsoluteInputFiles();
             bool changed = false;
 
+            // Only hashes the inputFiles entries when the config file was written since this bundle was last processed
+            ulong inputFilesHash;
+            bool inputFilesChanged;
+            bool trackInputFiles = BundleInputTracker.Check(bundle, out inputFilesHash, out inputFilesChanged);
+
             if (bundle.GetAbsoluteInputFiles(true).Count > 1 || bundle.InputFiles.FirstOrDefault() != bundle.OutputFileName)
             {
                 BundleHandler.ProcessBundle(baseFolder, bundle);
@@ -129,7 +147,10 @@ namespace BundlerMinifier
             if (bundle.IsMinificationEnabled)
             {
                 var outputWriteTime = File.GetLastWriteTimeUtc(minFile);
-                var minifyChanged = bundle.MostRecentWrite >= outputWriteTime;
+
+                // Removing or reordering entries leaves every input file older than the min file,
+                // so a changed inputFiles list has to force the minification
+                var minifyChanged = inputFilesChanged || bundle.MostRecentWrite >= outputWriteTime;
 
                 if (minifyChanged)
                 {
@@ -170,6 +191,9 @@ namespace BundlerMinifier
                 else
                     BundleMinifier.GzipFile(fileToGzip, bundle, minResult.Changed, minResult.MinifiedContent);
             }
+
+            if (trackInputFiles)
+                BundleInputTracker.Commit(bundle, inputFilesHash);
 
             return changed;
         }

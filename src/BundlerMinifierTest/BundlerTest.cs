@@ -208,6 +208,54 @@ namespace BundlerMinifierTest
         }
 
         [TestMethod]
+        public void ReminifyWhenInputFilesChange()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.js";
+            DateTime written = DateTime.UtcNow;
+
+            WriteConfig(config, written, "file1.js", "file2.js");
+            _processor.Process(config);
+            Assert.IsTrue(File.ReadAllText(minFile).StartsWith("var file1=1,file2=2"));
+
+            // only the order changes, so every input file is still older than the min file
+            WriteConfig(config, written.AddSeconds(1), "file2.js", "file1.js");
+            Assert.IsTrue(_processor.Process(config));
+            Assert.IsTrue(File.ReadAllText(minFile).StartsWith("var file2=2,file1=1"));
+
+            // removing an entry
+            WriteConfig(config, written.AddSeconds(2), "file2.js");
+            Assert.IsTrue(_processor.Process(config));
+            Assert.IsTrue(File.ReadAllText(minFile).StartsWith("var file2=2"));
+            Assert.IsFalse(File.ReadAllText(minFile).Contains("file1"));
+        }
+
+        [TestMethod]
+        public void SkipMinifyWhenInputFilesAreTheSame()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.js";
+            DateTime written = DateTime.UtcNow;
+
+            WriteConfig(config, written, "file1.js", "file2.js");
+            _processor.Process(config);
+            var firstFileTime = File.GetLastWriteTimeUtc(minFile);
+
+            // the config file is saved again with the very same inputFiles
+            WriteConfig(config, written.AddSeconds(1), "file1.js", "file2.js");
+            Assert.IsFalse(_processor.Process(config));
+            Assert.AreEqual(firstFileTime, File.GetLastWriteTimeUtc(minFile));
+        }
+
+        private static void WriteConfig(string configFile, DateTime writeTime, params string[] inputFiles)
+        {
+            string inputs = string.Join(", ", inputFiles.Select(f => "\"" + f + "\""));
+
+            File.WriteAllText(configFile, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [" + inputs + "] }]");
+            File.SetLastWriteTimeUtc(configFile, writeTime);
+        }
+
+        [TestMethod]
         public void SupportNewSyntax()
         {
             _processor.Process(TEST_BUNDLE.Replace("test1", "test8"));

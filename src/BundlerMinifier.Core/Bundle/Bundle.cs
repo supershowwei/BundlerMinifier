@@ -53,6 +53,50 @@ namespace BundlerMinifier
             get { return LayoutPreambles.Concat(InputFiles).Concat(LayoutPostscripts); }
         }
 
+        /// <summary>
+        /// Last write time (UTC ticks) of the config file, taken right before its content was read.
+        /// Zero when the bundle was not read from a config file.
+        /// </summary>
+        internal long ConfigWriteTicks { get; set; }
+
+        /// <summary>
+        /// FNV-1a hash of the values of <see cref="AllInputFiles"/> (the entries themselves, not the
+        /// content of the files) in bundling order, so adding, removing or reordering entries changes it.
+        /// </summary>
+        internal ulong ComputeInputFilesHash()
+        {
+            ulong hash = 14695981039346656037UL;
+
+            hash = HashFiles(hash, LayoutPreambles);
+            hash = HashFiles(hash, InputFiles);
+
+            return HashFiles(hash, LayoutPostscripts);
+        }
+
+        private static ulong HashFiles(ulong hash, List<string> files)
+        {
+            const ulong prime = 1099511628211UL;
+
+            unchecked
+            {
+                for (int i = 0; i < files.Count; i++)
+                {
+                    string file = files[i];
+
+                    if (file != null)
+                    {
+                        for (int j = 0; j < file.Length; j++)
+                            hash = (hash ^ file[j]) * prime;
+                    }
+
+                    // entry separator, U+FFFF never appears in a path
+                    hash = (hash ^ 0xFFFF) * prime;
+                }
+            }
+
+            return hash;
+        }
+
         internal string Output { get; set; }
 
         internal bool IsMinificationEnabled

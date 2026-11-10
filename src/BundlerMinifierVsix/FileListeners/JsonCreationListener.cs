@@ -34,6 +34,9 @@ namespace BundlerMinifierVsix.Listeners
                 if (fileName.Equals(Constants.CONFIG_FILENAME, StringComparison.OrdinalIgnoreCase))
                 {
                     _document.FileActionOccurred += DocumentSaved;
+
+                    // the file on disk is still the unedited one, which is what the next save is compared against
+                    BundleService.TrackInputFiles(_document.FilePath);
                 }
                 else if (fileName.Equals(Constants.CONFIG_FILENAME + ".bindings", StringComparison.OrdinalIgnoreCase))
                 {

@@ -60,13 +60,19 @@ namespace BundlerMinifier
         {
             try
             {
-                if (string.IsNullOrEmpty(configFile) || !File.Exists(configFile))
+                FileInfo info = string.IsNullOrEmpty(configFile) ? null : new FileInfo(configFile);
+
+                if (info == null || !info.Exists)
                 {
                     bundles = Enumerable.Empty<Bundle>();
                     return false;
                 }
 
-                configFile = new FileInfo(configFile).FullName;
+                configFile = info.FullName;
+
+                // taken before the content is read, so an edit in between only makes the time look older
+                // and the next run checks the input files again
+                long configWriteTicks = info.LastWriteTimeUtc.Ticks;
                 string content = File.ReadAllText(configFile);
                 var layouts = new Dictionary<string, BundleLayout>(StringComparer.Ordinal);
                 var list = new List<Bundle>();
@@ -88,6 +94,7 @@ namespace BundlerMinifier
                 foreach (Bundle bundle in list)
                 {
                     bundle.FileName = configFile;
+                    bundle.ConfigWriteTicks = configWriteTicks;
                     BundleLayout.Apply(bundle, layouts);
                 }
 

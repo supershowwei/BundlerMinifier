@@ -118,6 +118,28 @@ namespace BundlerMinifierVsix
             });
         }
 
+        /// <summary>
+        /// Remembers the inputFiles of every bundle in the config file, so saving it only forces
+        /// the bundles whose inputFiles were changed.
+        /// </summary>
+        public static void TrackInputFiles(string configFile)
+        {
+            if (string.IsNullOrEmpty(configFile))
+                return;
+
+            ThreadPool.QueueUserWorkItem((o) =>
+            {
+                try
+                {
+                    BundleFileProcessor.TrackInputFiles(configFile);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log(ex);
+                }
+            });
+        }
+
         public static bool IsOutputProduced(string configFile)
         {
             if (string.IsNullOrEmpty(configFile))
