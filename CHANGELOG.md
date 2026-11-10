@@ -13,6 +13,15 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.3.1
+
+- [x] Changing the `inputFiles` of a bundle regenerates its minified file
+  - Removing or reordering entries, or adding a file older than the minified file,
+    used to leave the minified file untouched
+  - Only the bundles whose `inputFiles` changed are minified again
+  - Applies for as long as the process runs: saving `bundleconfig.json` in Visual Studio
+    and the `watch` mode; one-off runs (MSBuild, `dotnet bundle`) behave as before
+
 ## 4.3
 
 - [x] Layouts can provide `styles` for CSS bundles
