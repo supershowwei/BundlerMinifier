@@ -348,6 +348,58 @@ namespace BundlerMinifierTest
             Assert.IsFalse(File.ReadAllText(minFile).Contains("file2"));
         }
 
+        [TestMethod]
+        public void ProcessSameConfigConcurrently()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            DateTime written = DateTime.UtcNow;
+            var failures = new System.Collections.Concurrent.ConcurrentQueue<string>();
+
+            EventHandler<MinifyFileEventArgs> onError = (s, e) =>
+            {
+                foreach (MinificationError error in e.Result.Errors)
+                    failures.Enqueue(error.Message);
+            };
+
+            BundleMinifier.ErrorMinifyingFile += onError;
+
+            try
+            {
+                WriteConfig(config, written, "file1.js", "file2.js");
+                BundleFileProcessor.TrackInputFiles(config);
+                _processor.Process(config);
+
+                for (int round = 1; round <= 24; round++)
+                {
+                    // reordering the inputFiles forces the minification, and Visual Studio runs every
+                    // request on a thread pool thread, e.g. the config file and a source file saved together
+                    if (round % 2 == 1)
+                        WriteConfig(config, written.AddSeconds(round), "file2.js", "file1.js");
+                    else
+                        WriteConfig(config, written.AddSeconds(round), "file1.js", "file2.js");
+
+                    System.Threading.Tasks.Parallel.For(0, 4, i =>
+                    {
+                        try
+                        {
+                            _processor.Process(config);
+                        }
+                        catch (Exception ex)
+                        {
+                            failures.Enqueue(ex.Message);
+                        }
+                    });
+                }
+            }
+            finally
+            {
+                BundleMinifier.ErrorMinifyingFile -= onError;
+            }
+
+            Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures.Distinct()));
+            Assert.IsTrue(File.ReadAllText("../../../artifacts/foo.min.js").StartsWith("var file1=1"));
+        }
+
         private static void WriteConfig(string configFile, DateTime writeTime, params string[] inputFiles)
         {
             string inputs = string.Join(", ", inputFiles.Select(f => "\"" + f + "\""));

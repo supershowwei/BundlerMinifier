@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -9,6 +10,7 @@ namespace BundlerMinifier
     public class BundleFileProcessor
     {
         private static string[] _supported = new[] { ".JS", ".CSS", ".HTML", ".HTM" };
+        private static readonly ConcurrentDictionary<string, object> _outputLocks = new ConcurrentDictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
         public static bool IsSupported(params string[] files)
         {
@@ -89,7 +91,10 @@ namespace BundlerMinifier
                     return false;
             }
 
-            return DeleteMinFiles(minFile);
+            lock (GetOutputLock(minFile))
+            {
+                return DeleteMinFiles(minFile);
+            }
         }
 
         private bool DeleteMinFiles(string minFile)
@@ -180,7 +185,27 @@ namespace BundlerMinifier
             }
         }
 
+        /// <summary>
+        /// Visual Studio runs every request on a thread pool thread, so the same bundle can be asked for by several
+        /// at once, e.g. the config file and a source file being saved together. They each found the input files
+        /// changed and wrote the very same output files at the same time, which ends in a sharing violation.
+        /// One at a time, the later ones find the work done and write nothing.
+        /// </summary>
         private bool ProcessBundle(string baseFolder, Bundle bundle)
+        {
+            lock (GetOutputLock(BundleMinifier.GetMinFileName(bundle.GetAbsoluteOutputFile())))
+            {
+                return ProcessBundleExclusively(baseFolder, bundle);
+            }
+        }
+
+        /// <param name="minFile">Full path of the min file, which bundles writing to the same files have in common.</param>
+        private static object GetOutputLock(string minFile)
+        {
+            return _outputLocks.GetOrAdd(minFile, _ => new object());
+        }
+
+        private bool ProcessBundleExclusively(string baseFolder, Bundle bundle)
         {
             OnProcessing(bundle, baseFolder);
             var inputs = bundle.GetAbsoluteInputFiles();
