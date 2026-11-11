@@ -13,6 +13,12 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.3.3
+
+- [x] Fixed "the file is being used by another process" when the same bundle is processed
+  by several threads at once, e.g. the config file and a source file saved together in Visual Studio
+  - A bundle is now processed by one thread at a time, the later ones find the work done
+
 ## 4.3.2
 
 - [x] A bundle added to a `bundleconfig.json` that is being tracked is minified right away
