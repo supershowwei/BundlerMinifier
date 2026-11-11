@@ -58,6 +58,15 @@ namespace BundlerMinifier
 
         public static bool TryGetBundles(string configFile, out IEnumerable<Bundle> bundles)
         {
+            string error;
+            return TryGetBundles(configFile, out bundles, out error);
+        }
+
+        /// <param name="error">Why the config file could not be read. Null when it was read, or when there is no such file.</param>
+        public static bool TryGetBundles(string configFile, out IEnumerable<Bundle> bundles, out string error)
+        {
+            error = null;
+
             try
             {
                 FileInfo info = string.IsNullOrEmpty(configFile) ? null : new FileInfo(configFile);
@@ -81,9 +90,13 @@ namespace BundlerMinifier
                 {
                     if (BundleLayout.IsLayoutEntry(entry))
                     {
-                        // throws on a duplicate layout name
                         foreach (JProperty property in ((JObject)entry).Properties())
+                        {
+                            if (layouts.ContainsKey(property.Name))
+                                throw new InvalidOperationException($"The layout \"{property.Name}\" is defined more than once");
+
                             layouts.Add(property.Name, property.Value.ToObject<BundleLayout>());
+                        }
                     }
                     else
                     {
@@ -102,9 +115,10 @@ namespace BundlerMinifier
 
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
                 bundles = null;
+                error = ex.Message;
                 return false;
             }
         }

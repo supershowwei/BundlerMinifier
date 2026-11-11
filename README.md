@@ -179,8 +179,10 @@ inwards, before the `inputFiles`. The CSS bundle above is built from:
 Layout files support the same globbing and `!` exclusion patterns as
 `inputFiles`. Referencing an undefined layout, defining the same layout
 name twice or a circular layout reference makes the configuration file
-invalid. Layouts are not supported by `gulpfile.js` created by
-*Convert to Gulp*.
+invalid, and the reason is reported. A bundle whose only input file is
+its own output file takes no files from layouts, as they would be
+written into that file. Layouts are not supported by `gulpfile.js`
+created by *Convert to Gulp*.
 
 ### Task Runner Explorer
 Get a quick overview of the files you've specified or execute a bundle

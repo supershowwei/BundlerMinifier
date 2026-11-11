@@ -15,19 +15,21 @@ namespace BundlerMinifier
             IEnumerable<Bundle> bundles;
             bool fileExists = false;
             bool fallbackExists = fileExists = File.Exists(DefaultConfigFileName);
+            string error = null;
+            string fallbackError;
 
             if (index > -1)
             {
                 fileExists = File.Exists(args[index]);
 
-                if (BundleHandler.TryGetBundles(args[index], out bundles))
+                if (BundleHandler.TryGetBundles(args[index], out bundles, out error))
                 {
                     configPath = args[index];
                     return true;
                 }
             }
 
-            if (BundleHandler.TryGetBundles(DefaultConfigFileName, out bundles))
+            if (BundleHandler.TryGetBundles(DefaultConfigFileName, out bundles, out fallbackError))
             {
                 configPath = new FileInfo(DefaultConfigFileName).FullName;
                 return false;
@@ -41,7 +43,7 @@ namespace BundlerMinifier
                 }
                 else
                 {
-                    Console.WriteLine($"Configuration file {args[index]} has errors".Red().Bright());
+                    Console.WriteLine(ConfigErrorMessage(args[index], error).Red().Bright());
                 }
             }
 
@@ -51,11 +53,18 @@ namespace BundlerMinifier
             }
             else
             {
-                Console.WriteLine($"Configuration file {DefaultConfigFileName} has errors".Red().Bright());
+                Console.WriteLine(ConfigErrorMessage(DefaultConfigFileName, fallbackError).Red().Bright());
             }
 
             configPath = null;
             return false;
+        }
+
+        private static string ConfigErrorMessage(string configFile, string error)
+        {
+            string message = $"Configuration file {configFile} has errors";
+
+            return string.IsNullOrEmpty(error) ? message : message + ": " + error;
         }
 
         static int Main(params string[] args)

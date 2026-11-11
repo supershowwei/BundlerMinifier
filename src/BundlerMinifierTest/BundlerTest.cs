@@ -482,11 +482,77 @@ namespace BundlerMinifierTest
         {
             string filePath = "../../../artifacts/" + _guid + ".json";
 
+            string error;
+
             File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_missing\" }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _));
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"_missing\" referenced by foo.js");
 
             File.WriteAllText(filePath, "[{ \"_a\": { \"layout\": \"_b\" }, \"_b\": { \"layout\": \"_a\" } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_a\" }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _));
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "_a -> _b -> _a");
+
+            File.WriteAllText(filePath, "[{ \"_a\": { } }, { \"_a\": { } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"_a\" is defined more than once");
+        }
+
+        [TestMethod]
+        public void ProcessTellsWhyTheConfigIsInvalid()
+        {
+            string filePath = "../../../artifacts/" + _guid + ".json";
+
+            // a config file that is not there is still nothing to process, as before
+            Assert.IsFalse(_processor.Process(filePath));
+
+            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }]");
+            BundleFileProcessor.TrackInputFiles(filePath);
+            _processor.Process(filePath);
+
+            int deleted = 0;
+            _processor.AfterDeletingMinFile += (s, e) => deleted++;
+
+            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"], \"layout\": \"_missing\" }]");
+            File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow.AddSeconds(1));
+
+            var ex = Assert.ThrowsExactly<InvalidDataException>(() => _processor.Process(filePath));
+            StringAssert.Contains(ex.Message, "\"_missing\" referenced by foo.css");
+
+            // an unreadable config file does not count as every bundle having been removed from it
+            Assert.AreEqual(0, deleted);
+            Assert.IsTrue(File.Exists("../../../artifacts/foo.min.js"));
+        }
+
+        [TestMethod]
+        public void LayoutIsIgnoredWhenOutputIsTheOnlyInput()
+        {
+            string filePath = "../../../artifacts/" + _guid + ".json";
+            string source = "../../../artifacts/foo.js";
+            string minFile = "../../../artifacts/foo.min.js";
+            string layout = "{ \"_l\": { \"preambles\": [\"file1.js\"], \"postscripts\": [\"file2.js\"] } }";
+
+            // ./foo.js 與 foo.js 是同一個檔案，兩種寫法都算
+            foreach (string input in new[] { "foo.js", "./foo.js" })
+            {
+                File.WriteAllText(source, "var foo = 1;");
+                File.WriteAllText(filePath, "[" + layout + ", { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"" + input + "\"], \"layout\": \"_l\" }]");
+
+                var bundle = BundleHandler.GetBundles(filePath).Single();
+                CollectionAssert.AreEqual(new[] { input }, bundle.AllInputFiles.ToList());
+
+                // 套用 layout 的話，每處理一次來源檔就會被多疊一次 layout 的內容
+                _processor.Process(filePath);
+                _processor.Process(filePath);
+
+                Assert.AreEqual("var foo = 1;", File.ReadAllText(source).Trim());
+                Assert.IsFalse(File.Exists(minFile) && File.ReadAllText(minFile).Contains("file1"));
+            }
+
+            // 同一個 layout 套在一般的 bundle 上不受影響
+            File.WriteAllText(filePath, "[" + layout + ", { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\" }]");
+            CollectionAssert.AreEqual(new[] { "file1.js", "file4.js", "file2.js" }, BundleHandler.GetBundles(filePath).Single().AllInputFiles.ToList());
         }
     }
 }

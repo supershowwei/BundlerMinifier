@@ -43,6 +43,7 @@ namespace BundlerMinifier
         /// 沿著 bundle 的 layout 鏈往外走，依輸出檔類型填入 layout 提供的檔案：
         /// JS bundle 由外層 layout 包住內層，最外層的 preambles 最先、postscripts 最後；
         /// CSS bundle 只把 styles 由外往內疊加在 inputFiles 之前；其他類型不套用 layout 檔案。
+        /// 輸出檔就是自己唯一輸入檔的 bundle 也不套用，但 layout 鏈照樣會走過一遍，參照錯誤一樣會被擋下來。
         /// </summary>
         internal static void Apply(Bundle bundle, IDictionary<string, BundleLayout> layouts)
         {
@@ -50,8 +51,9 @@ namespace BundlerMinifier
             bundle.LayoutPostscripts.Clear();
 
             string extension = Path.GetExtension(bundle.OutputFileName);
-            bool isJavaScript = string.Equals(extension, ".js", StringComparison.OrdinalIgnoreCase);
-            bool isCss = string.Equals(extension, ".css", StringComparison.OrdinalIgnoreCase);
+            bool takesFiles = !IsOwnOutput(bundle);
+            bool isJavaScript = takesFiles && string.Equals(extension, ".js", StringComparison.OrdinalIgnoreCase);
+            bool isCss = takesFiles && string.Equals(extension, ".css", StringComparison.OrdinalIgnoreCase);
 
             var visited = new List<string>();
             string name = bundle.Layout;
@@ -80,6 +82,37 @@ namespace BundlerMinifier
 
                 name = layout.Layout;
             }
+        }
+
+        /// <summary>
+        /// 唯一的輸入檔就是輸出檔的 bundle 不會被處理，輸出檔（也就是來源檔本身）不會被改寫。
+        /// 一旦加上 layout 的檔案，輸入檔就不只一個，它會被當成一般 bundle 寫回來源檔，
+        /// 而且每處理一次就再疊上一次 layout 的內容。
+        /// </summary>
+        private static bool IsOwnOutput(Bundle bundle)
+        {
+            if (bundle.InputFiles.Count != 1)
+                return false;
+
+            string input = bundle.InputFiles[0];
+            string output = bundle.OutputFileName;
+
+            if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(output))
+                return false;
+
+            if (string.Equals(input, output, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // 寫法不同但指向同一個檔案，例如 ./site.js 與 site.js
+            if (string.IsNullOrEmpty(bundle.FileName) || input.IndexOf('*') > -1 || input[0] == '!')
+                return false;
+
+            string folder = Path.GetDirectoryName(bundle.FileName);
+
+            return string.Equals(
+                Path.GetFullPath(Path.Combine(folder, input.NormalizePath())),
+                Path.GetFullPath(Path.Combine(folder, output.NormalizePath())),
+                StringComparison.OrdinalIgnoreCase);
         }
     }
 }

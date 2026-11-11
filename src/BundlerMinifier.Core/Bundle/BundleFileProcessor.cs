@@ -36,10 +36,15 @@ namespace BundlerMinifier
 
             if (bundles == null)
             {
-                bundles = BundleHandler.GetBundles(fileName);
+                string error;
+                bool read = BundleHandler.TryGetBundles(fileName, out bundles, out error);
+
+                // Says what is wrong with the config file, the bundles being null would only end in a NullReferenceException
+                if (bundles == null)
+                    throw new InvalidDataException($"{info.FullName} could not be read: {error}");
 
                 // With the whole config file at hand, a bundle remembered from an earlier read that is gone was removed from it
-                if (bundles != null)
+                if (read)
                     result |= DeleteMinFilesOfRemovedBundles(info.FullName, bundles);
             }
 

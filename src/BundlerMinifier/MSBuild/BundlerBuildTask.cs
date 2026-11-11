@@ -43,7 +43,16 @@ namespace BundlerMinifier
             BundleMinifier.AfterWritingMinFile += FileMinifier_AfterWritingMinFile;
             processor.MinificationSkipped += (s, e) => { Log.LogMessage(MessageImportance.Normal, "Bundler: No changes, skipping minification of " + e.OutputFileName); };
 
-            processor.Process(configFile.FullName);
+            try
+            {
+                processor.Process(configFile.FullName);
+            }
+            catch (InvalidDataException ex)
+            {
+                // the config file itself is invalid, e.g. a bundle references a layout that is not defined
+                Log.LogError("Bundler: " + ex.Message);
+                return false;
+            }
 
             Log.LogMessage(MessageImportance.High, "Bundler: Done processing " + configFile.Name);
 

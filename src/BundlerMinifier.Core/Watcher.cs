@@ -100,6 +100,7 @@ namespace BundlerMinifier
             fsw.EnableRaisingEvents = false;
             int retries = 0;
             bool suppressOutputMessage = false;
+            string error = null;
 
             while (retries < maxRetries)
             {
@@ -134,15 +135,16 @@ namespace BundlerMinifier
 
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
                     ++retries;
+                    error = ex.Message;
                 }
             }
 
             if (retries >= maxRetries)
             {
-                Console.WriteLine("An error occurred while processing".Red().Bright());
+                Console.WriteLine($"An error occurred while processing: {error}".Red().Bright());
             }
 
             fsw.EnableRaisingEvents = true;
@@ -157,10 +159,11 @@ namespace BundlerMinifier
         {
             bool anyChanges = false;
             IEnumerable<Bundle> bundles;
+            string error;
 
-            if (!BundleHandler.TryGetBundles(_configPath, out bundles))
+            if (!BundleHandler.TryGetBundles(_configPath, out bundles, out error))
             {
-                throw new Exception("Unable to load bundles.");
+                throw new Exception(string.IsNullOrEmpty(error) ? "Unable to load bundles." : "Unable to load bundles. " + error);
             }
 
             var oldHandlers = ChangeHandlers.ToList();
