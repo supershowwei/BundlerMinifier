@@ -13,6 +13,9 @@ namespace BundlerMinifier
         private static string _configPath;
         private static bool _watchingAll;
         private static BundleFileProcessor _processor;
+        private static readonly object PendingLock = new object();
+        private static readonly HashSet<string> PendingFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static bool _processingPending;
 
         public static bool Configure(BundleFileProcessor processor, List<string> configurations, string configPath)
         {
@@ -60,7 +63,8 @@ namespace BundlerMinifier
 
         private static void ConfigureWatcher(string configPath)
         {
-            _configPath = configPath;
+            // the full path, as that is what the watcher reports a change of the config file with
+            _configPath = new FileInfo(configPath).FullName;
             string basePath = new FileInfo(configPath).Directory.FullName;
             var fsw = new FileSystemWatcher(basePath);
 
@@ -93,66 +97,113 @@ namespace BundlerMinifier
             }
         }
 
-        private static async void FilesChanged(object sender, FileSystemEventArgs e)
+        private static void FilesChanged(object sender, FileSystemEventArgs e)
+        {
+            // The watcher is never switched off while a change is handled, that dropped every file saved in the
+            // meantime. The changed files are collected instead and handled by a single worker, batch after batch.
+            lock (PendingLock)
+            {
+                PendingFiles.Add(e.FullPath);
+
+                if (_processingPending)
+                    return;
+
+                _processingPending = true;
+            }
+
+            Task.Run(ProcessPendingFiles);
+        }
+
+        private static async Task ProcessPendingFiles()
+        {
+            while (true)
+            {
+                // lets the writes finish, and puts the files that were saved together into the same batch
+                await Task.Delay(100);
+
+                bool configChanged;
+                List<string> files;
+
+                lock (PendingLock)
+                {
+                    if (PendingFiles.Count == 0)
+                    {
+                        _processingPending = false;
+                        return;
+                    }
+
+                    configChanged = PendingFiles.Remove(_configPath);
+                    files = PendingFiles.Where(ChangeHandler.IsFileValid).ToList();
+                    PendingFiles.Clear();
+                }
+
+                bool showMessage = false;
+
+                // the config file goes first, so the files are matched against the bundles as they are now
+                if (configChanged)
+                    showMessage |= await Retry(ReloadConfigAndReport);
+
+                if (files.Count > 0)
+                    showMessage |= await Retry(() => ProcessFiles(files));
+
+                if (showMessage)
+                {
+                    Console.WriteLine("Watching... Press [Enter] to stop".LightGray().Bright());
+                }
+            }
+        }
+
+        /// <summary>
+        /// Runs the action, trying again for a while when it fails as a file may still be being written.
+        /// </summary>
+        /// <returns>True when something was reported, be it by the action or as the error it kept failing with.</returns>
+        private static async Task<bool> Retry(Func<bool> action)
         {
             const int maxRetries = 10;
-            var fsw = (FileSystemWatcher)sender;
-            fsw.EnableRaisingEvents = false;
-            int retries = 0;
-            bool suppressOutputMessage = false;
             string error = null;
 
-            while (retries < maxRetries)
+            for (int retries = 0; retries < maxRetries; retries++)
             {
-                await Task.Delay(100);
+                if (retries > 0)
+                    await Task.Delay(100);
 
                 try
                 {
-                    if (string.Equals(e.FullPath, _configPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        bool changed = ReloadConfig();
-                        suppressOutputMessage = !changed;
-
-                        if (changed)
-                        {
-                            Console.WriteLine("Configuration reloaded".Green().Bright());
-                        }
-                    }
-                    else
-                    {
-                        bool anyRan = false;
-
-                        foreach (ChangeHandler handler in ChangeHandlers)
-                        {
-                            anyRan |= handler.FilesChanged(e);
-                        }
-
-                        if (!anyRan)
-                        {
-                            suppressOutputMessage = true;
-                        }
-                    }
-
-                    break;
+                    return action();
                 }
                 catch (Exception ex)
                 {
-                    ++retries;
                     error = ex.Message;
                 }
             }
 
-            if (retries >= maxRetries)
+            Console.WriteLine($"An error occurred while processing: {error}".Red().Bright());
+
+            return true;
+        }
+
+        private static bool ReloadConfigAndReport()
+        {
+            bool changed = ReloadConfig();
+
+            if (changed)
             {
-                Console.WriteLine($"An error occurred while processing: {error}".Red().Bright());
+                Console.WriteLine("Configuration reloaded".Green().Bright());
             }
 
-            fsw.EnableRaisingEvents = true;
+            return changed;
+        }
 
-            if (!suppressOutputMessage)
+        private static bool ProcessFiles(List<string> files)
+        {
+            bool anyRan = false;
+
+            foreach (ChangeHandler handler in ChangeHandlers)
             {
-                Console.WriteLine("Watching... Press [Enter] to stop".LightGray().Bright());
+                anyRan |= handler.FilesChanged(files);
             }
+
+            return anyRan;
         }
 
         private static bool ReloadConfig()

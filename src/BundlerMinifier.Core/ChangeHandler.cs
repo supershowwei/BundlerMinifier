@@ -87,22 +87,24 @@ namespace BundlerMinifier
             return Equals(obj as ChangeHandler);
         }
 
-        public bool FilesChanged(FileSystemEventArgs e)
+        /// <summary>
+        /// Processes the bundle when one of the changed files is an input file of it that is newer than its output.
+        /// </summary>
+        /// <param name="files">The full paths of the changed files, the ones <see cref="IsFileValid"/> lets through.</param>
+        public bool FilesChanged(List<string> files)
         {
-            if (!IsFileValid(e.FullPath))
-            {
-                return false;
-            }
-
-            if (!BundleFileProcessor.IsFileConfigured(_configFile, e.FullPath).Any())
-            {
-                return false;
-            }
-
+            // The bundle is asked for its input files instead of reading the config file all over again for every
+            // change, and a config file that is invalid at the moment no longer keeps the source files from being processed
             var inputs = _bundle.GetAbsoluteInputFiles();
+
+            if (!files.Any(file => inputs.Contains(file, StringComparer.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
             var inputLastModified = inputs.Count > 0 ? inputs.Max(inputFile => File.GetLastWriteTimeUtc(inputFile)) : DateTime.MaxValue;
 
-            if ((_bundle.GetAbsoluteInputFiles().Count > 1 || _bundle.InputFiles.FirstOrDefault() != _bundle.OutputFileName)
+            if ((inputs.Count > 1 || _bundle.InputFiles.FirstOrDefault() != _bundle.OutputFileName)
                 && inputLastModified > File.GetLastWriteTimeUtc(_bundle.GetAbsoluteOutputFile()))
             {
                 return _processor.Process(_configFile, new Bundle[] { _bundle });
@@ -111,7 +113,7 @@ namespace BundlerMinifier
             return false;
         }
 
-        private bool IsFileValid(string file)
+        internal static bool IsFileValid(string file)
         {
             string fileName = Path.GetFileName(file);
 
