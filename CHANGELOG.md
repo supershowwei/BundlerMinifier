@@ -13,6 +13,24 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.3.2
+
+- [x] A bundle added to a `bundleconfig.json` that is being tracked is minified right away
+- [x] The minified file is deleted when its bundle is removed or its `inputFiles` are emptied
+  - Along with its source map and gzip file
+  - Emptied `inputFiles` are handled in every mode; a removed bundle is only noticed
+    for as long as the process runs (Visual Studio, `watch` mode)
+  - A minified file that another bundle still produces is kept
+- [x] A bundle whose only input file is its own output file takes no files from layouts
+  - They used to be written into that file again on every run
+- [x] An invalid `bundleconfig.json` says what is wrong with it,
+  e.g. which bundle references a layout that is not defined
+- [x] Fixes to the `watch` mode
+  - Files saved while another change was being handled are no longer missed
+  - A bundle removed from the config file is no longer rebuilt
+  - Source files keep being processed while the config file is invalid
+  - Changes to a config file given as a relative path are noticed
+
 ## 4.3.1
 
 - [x] Changing the `inputFiles` of a bundle regenerates its minified file
