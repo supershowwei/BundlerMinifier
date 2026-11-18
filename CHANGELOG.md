@@ -13,6 +13,19 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.4
+
+- [x] Layout variants: layouts that differ in only a few files no longer have to be defined twice
+  - A layout can define optional `variants`, keyed by name, and a bundle picks one with the optional `variant` property
+  - The variant applies to the whole layout chain: every layout that defines it uses the variant,
+    the others use their own files, however many layouts are in between
+  - A variant replaces the `preambles`, `postscripts` and `styles` it lists as a whole
+    and keeps the ones it leaves out; an empty list takes no files of that kind
+  - A variant can set `layout` to wrap the layout in another parent layout
+  - A `variant` that no layout in the chain defines makes the configuration file invalid
+  - Bundles without a `variant` and layouts without `variants` behave as before
+  - Adding or removing a bundle from Visual Studio keeps the `variant` and `variants`
+
 ## 4.3.4
 
 - [x] Updated NUglify to 1.24.0, which fixes JavaScript minification changing the meaning of the code
