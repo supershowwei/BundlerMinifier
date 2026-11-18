@@ -13,6 +13,13 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.3.4
+
+- [x] Updated NUglify to 1.24.0, which fixes JavaScript minification changing the meaning of the code
+  when an arrow function is followed by a line starting with `(`, e.g. an IIFE
+  - `f = () => { ... }` followed by `(() => { ... })();` on the next line used to be minified
+    into `f=(()=>{...})(()=>{...})()`, which calls the arrow function right away and throws a `TypeError`
+
 ## 4.3.3
 
 - [x] Fixed "the file is being used by another process" when the same bundle is processed

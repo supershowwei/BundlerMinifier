@@ -2,6 +2,6 @@
 {
     public class Constants
     {
-        public const string VERSION = "4.3.3";
+        public const string VERSION = "4.3.4";
     }
 }
