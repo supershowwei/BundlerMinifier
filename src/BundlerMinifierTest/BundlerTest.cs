@@ -596,6 +596,11 @@ namespace BundlerMinifierTest
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
             StringAssert.Contains(error, "\"layout\" property of foo.js is no longer supported");
 
+            // 錯誤訊息帶有行號，Visual Studio 的錯誤清單據此跳到該行
+            File.WriteAllText(filePath, "[\n  { \"_a\": { } },\n  {\n    \"outputFileName\": \"foo.js\",\n    \"layout\": \"_a\"\n  }\n]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.EndsWith(error, "(line 5)");
+
             File.WriteAllText(filePath, "[{ \"_a\": { }, \"_b\": { \"layout\": \"_a\" } }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
             StringAssert.Contains(error, "\"layout\" property of the layout \"_b\" is no longer supported");

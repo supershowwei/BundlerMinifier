@@ -36,6 +36,22 @@ namespace BundlerMinifierVsix
             }
         }
 
+        /// <summary>Brings up the output window with this extension's pane selected.</summary>
+        public static void ShowPane()
+        {
+            try
+            {
+                if (EnsurePane())
+                    pane.Activate();
+
+                BundlerMinifierPackage._dte?.Windows?.Item(EnvDTE.Constants.vsWindowKindOutput)?.Activate();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.Write(ex);
+            }
+        }
+
         public static void Log(Exception ex)
         {
             if (ex != null)

@@ -27,6 +27,25 @@ namespace BundlerMinifierVsix
             _providers.Add(file, provider);
         }
 
+        /// <summary>
+        /// Shows why a config file is invalid. The Error List is brought up the first time only,
+        /// so it doesn't keep popping up while the file stays invalid.
+        /// </summary>
+        /// <param name="lineNumber">1-based line in the config file, 0 when unknown.</param>
+        public static void AddConfigError(string configFile, string message, int lineNumber)
+        {
+            bool alreadyShown = _providers.ContainsKey(configFile);
+
+            AddErrors(configFile, new[]
+            {
+                // ErrorTask lines are 0-based
+                new MinificationError { FileName = configFile, Message = message, LineNumber = Math.Max(lineNumber - 1, 0) }
+            });
+
+            if (!alreadyShown)
+                _providers[configFile].Show();
+        }
+
         public static void CleanErrors(string file)
         {
             if (_providers.ContainsKey(file))

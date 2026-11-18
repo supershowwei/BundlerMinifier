@@ -76,7 +76,7 @@ namespace BundlerMinifier
                     foreach (JProperty property in ((JObject)entry).Properties())
                     {
                         if (!names.Add(property.Name))
-                            throw new InvalidOperationException($"The layout \"{property.Name}\" is defined more than once");
+                            throw new InvalidOperationException($"The layout \"{property.Name}\" is defined more than once{AtLine(property)}");
 
                         var definition = (JObject)property.Value;
                         RejectLayoutProperties(property.Name, definition);
@@ -90,7 +90,7 @@ namespace BundlerMinifier
                         if (children is JArray array)
                             ReadBundles(array, layout, bundles, names);
                         else if (children != null && children.Type != JTokenType.Null)
-                            throw new InvalidOperationException($"The \"{BundlesProperty}\" of the layout \"{property.Name}\" must be an array");
+                            throw new InvalidOperationException($"The \"{BundlesProperty}\" of the layout \"{property.Name}\" must be an array{AtLine(children)}");
                     }
                 }
                 else
@@ -98,7 +98,7 @@ namespace BundlerMinifier
                     Bundle bundle = entry.ToObject<Bundle>();
 
                     if (entry is JObject obj && obj[LayoutProperty] != null)
-                        throw new InvalidOperationException($"The \"{LayoutProperty}\" property of {bundle.OutputFileName} is no longer supported, place the bundle in the \"{BundlesProperty}\" of the layout instead");
+                        throw new InvalidOperationException($"The \"{LayoutProperty}\" property of {bundle.OutputFileName} is no longer supported, place the bundle in the \"{BundlesProperty}\" of the layout instead{AtLine(obj[LayoutProperty])}");
 
                     bundle.Layout = parent;
                     bundles.Add(bundle);
@@ -110,16 +110,26 @@ namespace BundlerMinifier
         private static void RejectLayoutProperties(string name, JObject definition)
         {
             if (definition[LayoutProperty] != null)
-                throw new InvalidOperationException($"The \"{LayoutProperty}\" property of the layout \"{name}\" is no longer supported, place the layout in the \"{BundlesProperty}\" of its parent layout instead");
+                throw new InvalidOperationException($"The \"{LayoutProperty}\" property of the layout \"{name}\" is no longer supported, place the layout in the \"{BundlesProperty}\" of its parent layout instead{AtLine(definition[LayoutProperty])}");
 
             if (definition["variants"] is JObject variants)
             {
                 foreach (JProperty variant in variants.Properties())
                 {
                     if (variant.Value is JObject obj && obj[LayoutProperty] != null)
-                        throw new InvalidOperationException($"The \"{LayoutProperty}\" property of the variant \"{variant.Name}\" of the layout \"{name}\" is no longer supported");
+                        throw new InvalidOperationException($"The \"{LayoutProperty}\" property of the variant \"{variant.Name}\" of the layout \"{name}\" is no longer supported{AtLine(obj[LayoutProperty])}");
                 }
             }
+        }
+
+        /// <summary>
+        /// 錯誤訊息後面加上設定檔中的行號，Visual Studio 的錯誤清單據此直接跳到該行。
+        /// </summary>
+        private static string AtLine(JToken token)
+        {
+            var info = token as IJsonLineInfo;
+
+            return info != null && info.HasLineInfo() ? $" (line {info.LineNumber})" : string.Empty;
         }
 
         /// <summary>

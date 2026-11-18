@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using BundlerMinifier;
 using EnvDTE80;
@@ -117,6 +118,7 @@ namespace BundlerMinifierVsix
                 try
                 {
                     Processor.Process(configFile, bundles);
+                    ConfigFileRead(configFile);
                 }
                 catch (Exception ex)
                 {
@@ -138,7 +140,18 @@ namespace BundlerMinifierVsix
             {
                 try
                 {
+                    // opening an invalid config file says why right away, not only once it is saved
+                    IEnumerable<Bundle> bundles;
+                    string error;
+
+                    if (!BundleHandler.TryGetBundles(configFile, out bundles, out error) && bundles == null)
+                    {
+                        RunOnUIThread(() => ReportInvalidConfigFile(configFile, error));
+                        return;
+                    }
+
                     BundleFileProcessor.TrackInputFiles(configFile);
+                    ConfigFileRead(configFile);
                 }
                 catch (Exception ex)
                 {
@@ -199,6 +212,7 @@ namespace BundlerMinifierVsix
                 try
                 {
                     Processor.SourceFileChanged(configFile, sourceFile);
+                    ConfigFileRead(configFile);
                 }
                 catch (Exception ex)
                 {
@@ -207,11 +221,55 @@ namespace BundlerMinifierVsix
             });
         }
 
+        /// <summary>The config file was read, so an error reported earlier for it is gone.</summary>
+        private static void ConfigFileRead(string configFile)
+        {
+            RunOnUIThread(() => ErrorList.CleanErrors(configFile));
+        }
+
         /// <summary>
-        /// Reports an exception thrown while processing a config file, e.g. one that is invalid.
-        /// This is async void, so anything escaping it terminates Visual Studio: it must never throw.
+        /// Reports an exception thrown while processing a config file. An invalid config file goes to the
+        /// Error List, where it can be seen and navigated to; anything else goes to the output window.
         /// </summary>
-        private static async void HandleProcessingException(string configFile, Exception ex)
+        private static void HandleProcessingException(string configFile, Exception ex)
+        {
+            if (ex is InvalidDataException)
+            {
+                // the message starts with the path of the config file, which the Error List already shows
+                const string prefix = " could not be read: ";
+                int index = ex.Message.IndexOf(prefix, StringComparison.Ordinal);
+                string reason = index > -1 ? ex.Message.Substring(index + prefix.Length) : ex.Message;
+
+                RunOnUIThread(() => ReportInvalidConfigFile(configFile, reason));
+                return;
+            }
+
+            RunOnUIThread(() =>
+            {
+                Logger.Log(Resources.Text.ErrorExceptionThrown.AddParams(configFile, ex));
+                Logger.ShowPane();
+            });
+        }
+
+        private static void ReportInvalidConfigFile(string configFile, string reason)
+        {
+            Logger.Log($"{configFile} could not be read: {reason}");
+
+            // "(line 12)" added by the config reader, or "line 12, position 5." from the JSON parser
+            Match line = Regex.Match(reason, @"\bline (\d+)");
+            int lineNumber = line.Success ? int.Parse(line.Groups[1].Value) : 0;
+
+            ErrorList.AddConfigError(configFile, reason, lineNumber);
+
+            if (_dte != null)
+                _dte.StatusBar.Text = $"{Path.GetFileName(configFile)} is invalid. See Error List for details";
+        }
+
+        /// <summary>
+        /// Runs the action on the UI thread once the package has loaded. This is async void, so anything
+        /// escaping it terminates Visual Studio: it must never throw.
+        /// </summary>
+        private static async void RunOnUIThread(Action action)
         {
             try
             {
@@ -221,22 +279,17 @@ namespace BundlerMinifierVsix
                 {
                     try
                     {
-                        var errorMessage = Resources.Text.ErrorExceptionThrown
-                            .AddParams(configFile, ex);
-                        Logger.Log(errorMessage);
-
-                        var window = _dte?.Windows?.Item(EnvDTE.Constants.vsWindowKindOutput);
-                        window?.Activate();
+                        action();
                     }
-                    catch (Exception reportError)
+                    catch (Exception error)
                     {
-                        System.Diagnostics.Debug.Write(reportError);
+                        System.Diagnostics.Debug.Write(error);
                     }
                 }));
             }
-            catch (Exception reportError)
+            catch (Exception error)
             {
-                System.Diagnostics.Debug.Write(reportError);
+                System.Diagnostics.Debug.Write(error);
             }
         }
 
