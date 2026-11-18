@@ -13,6 +13,19 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 5.0.1
+
+- [x] Republished 5.0 on top of 4.4.1; 5.0.0 was withdrawn as Visual Studio crashed
+  when the config file was still in the 4.x format, which now only reports the reason
+- [x] Breaking: layouts are now a hierarchy instead of being picked by name
+  - The bundles using a layout, and the layouts it wraps, are nested in its `bundles`,
+    which may be empty or left out; a bundle uses every layout it is nested in
+  - The `layout` property of bundles, layouts and variants is removed;
+    a config file that still uses it is invalid and the reason is reported
+  - Layout names still have to be unique in the whole file
+  - Removing a nested bundle from Visual Studio removes it from its layout,
+    and adding a bundle with the same output file as a nested one replaces it in place
+
 ## 4.4.1
 
 - [x] Fixed Visual Studio crashing when the config file is invalid
