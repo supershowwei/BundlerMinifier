@@ -13,6 +13,15 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 4.4.1
+
+- [x] Fixed Visual Studio crashing when the config file is invalid
+  - Reporting the error that processing an invalid config file throws used to throw itself,
+    which terminated Visual Studio, e.g. right after opening a solution
+  - The reason the config file is invalid is now written to the output window instead
+  - Updating the bundles of a changed source file and cleaning the output files say why
+    the config file is invalid, instead of throwing a `NullReferenceException`
+
 ## 4.4
 
 - [x] Layout variants: layouts that differ in only a few files no longer have to be defined twice
