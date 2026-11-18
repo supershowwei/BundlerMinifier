@@ -9,10 +9,6 @@ namespace BundlerMinifier
     /// </summary>
     public class BundleLayoutVariant
     {
-        /// <summary>這個變體改接的上層 layout，沒寫就沿用 layout 自己的上層。</summary>
-        [JsonProperty("layout")]
-        public string Layout { get; set; }
-
         [JsonProperty("preambles")]
         public List<string> Preambles { get; set; }
 

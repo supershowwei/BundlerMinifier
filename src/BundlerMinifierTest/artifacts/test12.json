@@ -7,39 +7,40 @@
       "postscripts": [],
       "styles": [
         "file1.css"
-      ]
-    }
-  },
-  {
-    "_inner": {
-      "layout": "_outer",
-      "preambles": [
-        "file2.js"
       ],
-      "postscripts": [],
-      "styles": [
-        "test2/foo.css"
+      "bundles": [
+        {
+          "_inner": {
+            "preambles": [
+              "file2.js"
+            ],
+            "postscripts": [],
+            "styles": [
+              "test2/foo.css"
+            ],
+            "bundles": [
+              {
+                "outputFileName": "test12.css",
+                "inputFiles": [
+                  "file2.css"
+                ],
+                "minify": {
+                  "enabled": false
+                }
+              },
+              {
+                "outputFileName": "test12.js",
+                "inputFiles": [
+                  "file4.js"
+                ],
+                "minify": {
+                  "enabled": false
+                }
+              }
+            ]
+          }
+        }
       ]
     }
-  },
-  {
-    "outputFileName": "test12.css",
-    "inputFiles": [
-      "file2.css"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner"
-  },
-  {
-    "outputFileName": "test12.js",
-    "inputFiles": [
-      "file4.js"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner"
   }
 ]

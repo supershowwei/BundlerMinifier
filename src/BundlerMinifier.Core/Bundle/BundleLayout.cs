@@ -8,12 +8,20 @@ using Newtonsoft.Json.Linq;
 namespace BundlerMinifier
 {
     /// <summary>
-    /// A named set of files that are placed around the input files of every bundle referencing it.
+    /// A named set of files that are placed around the input files of every bundle nested in it.
     /// </summary>
     public class BundleLayout
     {
-        [JsonProperty("layout")]
-        public string Layout { get; set; }
+        private const string BundlesProperty = "bundles";
+        private const string LayoutProperty = "layout";
+
+        /// <summary>layout 的名稱，也就是定義它的屬性名稱。</summary>
+        [JsonIgnore]
+        public string Name { get; internal set; }
+
+        /// <summary>包住這個 layout 的上層 layout，最外層的 layout 為 null。</summary>
+        [JsonIgnore]
+        public BundleLayout Parent { get; internal set; }
 
         [JsonProperty("preambles")]
         public List<string> Preambles { get; } = new List<string>();
@@ -47,14 +55,110 @@ namespace BundlerMinifier
         }
 
         /// <summary>
-        /// 沿著 bundle 的 layout 鏈往外走，依輸出檔類型填入 layout 提供的檔案：
+        /// 讀取設定檔的最上層陣列，依文件順序（深度優先）回傳所有葉節點 bundle。
+        /// layout 定義的 bundles 裡可以再放 layout 與 bundle，bundle 套用的 layout 完全由它所在的位置決定；
+        /// bundles 可以是空陣列或不寫。layout 名稱不可重複，舊版以 "layout" 指名上層 layout 的寫法不再支援。
+        /// </summary>
+        internal static List<Bundle> ReadBundles(JArray entries)
+        {
+            var bundles = new List<Bundle>();
+            ReadBundles(entries, null, bundles, new HashSet<string>(StringComparer.Ordinal));
+
+            return bundles;
+        }
+
+        private static void ReadBundles(JArray entries, BundleLayout parent, List<Bundle> bundles, HashSet<string> names)
+        {
+            foreach (JToken entry in entries)
+            {
+                if (IsLayoutEntry(entry))
+                {
+                    foreach (JProperty property in ((JObject)entry).Properties())
+                    {
+                        if (!names.Add(property.Name))
+                            throw new InvalidOperationException($"The layout \"{property.Name}\" is defined more than once");
+
+                        var definition = (JObject)property.Value;
+                        RejectLayoutProperties(property.Name, definition);
+
+                        BundleLayout layout = definition.ToObject<BundleLayout>();
+                        layout.Name = property.Name;
+                        layout.Parent = parent;
+
+                        JToken children = definition[BundlesProperty];
+
+                        if (children is JArray array)
+                            ReadBundles(array, layout, bundles, names);
+                        else if (children != null && children.Type != JTokenType.Null)
+                            throw new InvalidOperationException($"The \"{BundlesProperty}\" of the layout \"{property.Name}\" must be an array");
+                    }
+                }
+                else
+                {
+                    Bundle bundle = entry.ToObject<Bundle>();
+
+                    if (entry is JObject obj && obj[LayoutProperty] != null)
+                        throw new InvalidOperationException($"The \"{LayoutProperty}\" property of {bundle.OutputFileName} is no longer supported, place the bundle in the \"{BundlesProperty}\" of the layout instead");
+
+                    bundle.Layout = parent;
+                    bundles.Add(bundle);
+                }
+            }
+        }
+
+        /// <summary>舊版用 "layout" 指名上層 layout，忽略它會默默少掉 layout 的檔案，所以直接視為設定檔無效。</summary>
+        private static void RejectLayoutProperties(string name, JObject definition)
+        {
+            if (definition[LayoutProperty] != null)
+                throw new InvalidOperationException($"The \"{LayoutProperty}\" property of the layout \"{name}\" is no longer supported, place the layout in the \"{BundlesProperty}\" of its parent layout instead");
+
+            if (definition["variants"] is JObject variants)
+            {
+                foreach (JProperty variant in variants.Properties())
+                {
+                    if (variant.Value is JObject obj && obj[LayoutProperty] != null)
+                        throw new InvalidOperationException($"The \"{LayoutProperty}\" property of the variant \"{variant.Name}\" of the layout \"{name}\" is no longer supported");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 依文件順序列出 layout 項目底下（含更深層 layout）所有巢狀的 bundle 物件。
+        /// </summary>
+        internal static IEnumerable<JObject> GetNestedBundles(JToken layoutEntry)
+        {
+            if (!IsLayoutEntry(layoutEntry))
+                yield break;
+
+            foreach (JProperty property in ((JObject)layoutEntry).Properties())
+            {
+                if (!(property.Value[BundlesProperty] is JArray children))
+                    continue;
+
+                foreach (JToken child in children.ToList())
+                {
+                    if (IsLayoutEntry(child))
+                    {
+                        foreach (JObject nested in GetNestedBundles(child))
+                            yield return nested;
+                    }
+                    else if (child is JObject bundle)
+                    {
+                        yield return bundle;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 沿著 bundle 所在的 layout 往外走，依輸出檔類型填入 layout 提供的檔案：
         /// JS bundle 由外層 layout 包住內層，最外層的 preambles 最先、postscripts 最後；
         /// CSS bundle 只把 styles 由外往內疊加在 inputFiles 之前；其他類型不套用 layout 檔案。
-        /// 輸出檔就是自己唯一輸入檔的 bundle 也不套用，但 layout 鏈照樣會走過一遍，參照錯誤一樣會被擋下來。
-        /// bundle 有指定 variant 時，每一層 layout 若有定義同名變體，就由變體決定這一層的檔案清單與上層 layout；
-        /// 指定的變體在實際走過的整條鏈上都沒有定義時，設定檔無效。
+        /// 輸出檔就是自己唯一輸入檔的 bundle 也不套用。
+        /// bundle 有指定 variant 時，每一層 layout 若有定義同名變體，就由變體決定這一層的檔案清單；
+        /// 指定的變體在整條鏈上都沒有定義時，設定檔無效。
         /// </summary>
-        internal static void Apply(Bundle bundle, IDictionary<string, BundleLayout> layouts)
+        internal static void Apply(Bundle bundle)
         {
             bundle.LayoutPreambles.Clear();
             bundle.LayoutPostscripts.Clear();
@@ -68,21 +172,8 @@ namespace BundlerMinifier
             bool hasVariant = !string.IsNullOrEmpty(variantName);
             bool variantFound = false;
 
-            var visited = new List<string>();
-            string name = bundle.Layout;
-
-            while (!string.IsNullOrEmpty(name))
+            for (BundleLayout layout = bundle.Layout; layout != null; layout = layout.Parent)
             {
-                if (visited.Contains(name))
-                    throw new InvalidOperationException($"Circular layout reference: {string.Join(" -> ", visited)} -> {name}");
-
-                BundleLayout layout;
-
-                if (!layouts.TryGetValue(name, out layout))
-                    throw new InvalidOperationException($"The layout \"{name}\" referenced by {bundle.OutputFileName} is not defined");
-
-                visited.Add(name);
-
                 // 寫成 "v": null 的變體視為空的變體，全部沿用預設內容
                 BundleLayoutVariant variant = null;
 
@@ -98,8 +189,6 @@ namespace BundlerMinifier
                 {
                     bundle.LayoutPreambles.InsertRange(0, variant?.Styles ?? layout.Styles);
                 }
-
-                name = variant?.Layout ?? layout.Layout;
             }
 
             if (hasVariant && !variantFound)

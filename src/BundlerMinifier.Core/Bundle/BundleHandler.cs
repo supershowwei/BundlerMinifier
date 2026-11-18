@@ -14,7 +14,6 @@ namespace BundlerMinifier
         {
             List<object> entries = ReadConfigEntries(configFile);
             entries.RemoveAll(x => x is Bundle bundle && bundle.OutputFileName.Equals(newBundle.OutputFileName));
-            entries.Add(newBundle);
             newBundle.FileName = configFile;
 
             JsonSerializerSettings settings = new JsonSerializerSettings()
@@ -23,6 +22,22 @@ namespace BundlerMinifier
                 DefaultValueHandling = DefaultValueHandling.Ignore,
             };
 
+            // 同名的 bundle 已經放在某個 layout 裡時就地取代，讓它留在原本的 layout 下，
+            // 不會被搬到最上層而默默少掉 layout 的檔案
+            List<JObject> nested = GetNestedBundles(entries, newBundle.OutputFileName);
+
+            if (nested.Count > 0)
+            {
+                nested[0].Replace(JObject.FromObject(newBundle, JsonSerializer.Create(settings)));
+
+                foreach (JObject duplicate in nested.Skip(1))
+                    duplicate.Remove();
+            }
+            else
+            {
+                entries.Add(newBundle);
+            }
+
             string content = JsonConvert.SerializeObject(entries, settings);
             File.WriteAllText(configFile, content + Environment.NewLine);
         }
@@ -30,16 +45,35 @@ namespace BundlerMinifier
         public static void RemoveBundle(string configFile, Bundle bundleToRemove)
         {
             List<object> entries = ReadConfigEntries(configFile);
+            int removed = entries.RemoveAll(e => bundleToRemove.Equals(e));
 
-            if (entries.RemoveAll(e => bundleToRemove.Equals(e)) > 0)
+            // 放在 layout 裡的 bundle 從原本的位置移除，layout 的 bundles 因此變成空陣列也沒關係
+            foreach (JObject nested in GetNestedBundles(entries, bundleToRemove.OutputFileName))
+            {
+                nested.Remove();
+                removed++;
+            }
+
+            if (removed > 0)
             {
                 string content = JsonConvert.SerializeObject(entries, Formatting.Indented);
                 File.WriteAllText(configFile, content);
             }
         }
 
+        /// <summary>依文件順序列出各個 layout 項目裡，輸出檔為 <paramref name="outputFileName"/> 的巢狀 bundle。</summary>
+        private static List<JObject> GetNestedBundles(List<object> entries, string outputFileName)
+        {
+            return entries
+                .OfType<JToken>()
+                .SelectMany(BundleLayout.GetNestedBundles)
+                .Where(b => string.Equals((string)b["outputFileName"], outputFileName, StringComparison.Ordinal))
+                .ToList();
+        }
+
         /// <summary>
-        /// Reads the config as bundles, keeping layout entries as raw JSON so rewriting the file preserves them.
+        /// Reads the config as bundles, keeping layout entries (and the bundles nested in them) as raw JSON
+        /// so rewriting the file preserves them.
         /// </summary>
         private static List<object> ReadConfigEntries(string configFile)
         {
@@ -83,32 +117,13 @@ namespace BundlerMinifier
                 // and the next run checks the input files again
                 long configWriteTicks = info.LastWriteTimeUtc.Ticks;
                 string content = File.ReadAllText(configFile);
-                var layouts = new Dictionary<string, BundleLayout>(StringComparer.Ordinal);
-                var list = new List<Bundle>();
-
-                foreach (JToken entry in JArray.Parse(content))
-                {
-                    if (BundleLayout.IsLayoutEntry(entry))
-                    {
-                        foreach (JProperty property in ((JObject)entry).Properties())
-                        {
-                            if (layouts.ContainsKey(property.Name))
-                                throw new InvalidOperationException($"The layout \"{property.Name}\" is defined more than once");
-
-                            layouts.Add(property.Name, property.Value.ToObject<BundleLayout>());
-                        }
-                    }
-                    else
-                    {
-                        list.Add(entry.ToObject<Bundle>());
-                    }
-                }
+                List<Bundle> list = BundleLayout.ReadBundles(JArray.Parse(content));
 
                 foreach (Bundle bundle in list)
                 {
                     bundle.FileName = configFile;
                     bundle.ConfigWriteTicks = configWriteTicks;
-                    BundleLayout.Apply(bundle, layouts);
+                    BundleLayout.Apply(bundle);
                 }
 
                 bundles = list.ToArray();

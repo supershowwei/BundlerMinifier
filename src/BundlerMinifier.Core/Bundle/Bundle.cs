@@ -33,8 +33,12 @@ namespace BundlerMinifier
         [JsonProperty("wrapInIife")]
         public bool WrapInIife { get; set; }
 
-        [JsonProperty("layout")]
-        public string Layout { get; set; }
+        /// <summary>
+        /// bundle 所在的 layout，也就是設定檔中直接包住它的 layout；放在最上層的 bundle 為 null。
+        /// 由設定檔中的位置決定，不會寫回設定檔。
+        /// </summary>
+        [JsonIgnore]
+        public BundleLayout Layout { get; internal set; }
 
         /// <summary>
         /// 可選，要使用的 layout 變體名稱。layout 鏈上每個有定義這個變體的 layout 都改用變體的設定，
@@ -264,12 +268,6 @@ namespace BundlerMinifier
         public bool ShouldSerializeWrapInIife()
         {
             return WrapInIife;
-        }
-
-        /// <summary>For the JSON.NET serializer</summary>
-        public bool ShouldSerializeLayout()
-        {
-            return !string.IsNullOrEmpty(Layout);
         }
 
         /// <summary>For the JSON.NET serializer</summary>

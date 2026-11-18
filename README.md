@@ -121,9 +121,9 @@ project will produce different output.
 
 ### Layouts
 
-Files shared by many bundles can be defined once in a layout and
-referenced by name. A layout is an entry in `bundleconfig.json` without
-an `outputFileName`, keyed by the layout name:
+Files shared by many bundles can be defined once in a layout. A layout is
+an entry in `bundleconfig.json` without an `outputFileName`, keyed by the
+layout name, and the bundles using it are nested in its `bundles`:
 
 ```json
 [
@@ -131,38 +131,47 @@ an `outputFileName`, keyed by the layout name:
     "_layout": {
       "preambles": [ "wwwroot/js/common.js" ],
       "postscripts": [],
-      "styles": [ "wwwroot/css/common.css" ]
+      "styles": [ "wwwroot/css/common.css" ],
+      "bundles": [
+        {
+          "_main-layout": {
+            "preambles": [ "wwwroot/js/_main-layout.js" ],
+            "postscripts": [ "wwwroot/js/advertisement.js" ],
+            "styles": [ "wwwroot/css/_main-layout.css" ],
+            "bundles": [
+              {
+                "outputFileName": "wwwroot/js/polyfill.min.js",
+                "inputFiles": [ "wwwroot/js/polyfill.js" ]
+              },
+              {
+                "outputFileName": "wwwroot/css/polyfill.min.css",
+                "inputFiles": [ "wwwroot/css/polyfill.css" ]
+              }
+            ]
+          }
+        }
+      ]
     }
   },
   {
-    "_main-layout": {
-      "layout": "_layout",
-      "preambles": [ "wwwroot/js/_main-layout.js" ],
-      "postscripts": [ "wwwroot/js/advertisement.js" ],
-      "styles": [ "wwwroot/css/_main-layout.css" ]
-    }
-  },
-  {
-    "outputFileName": "wwwroot/js/polyfill.min.js",
-    "inputFiles": [ "wwwroot/js/polyfill.js" ],
-    "layout": "_main-layout"
-  },
-  {
-    "outputFileName": "wwwroot/css/polyfill.min.css",
-    "inputFiles": [ "wwwroot/css/polyfill.css" ],
-    "layout": "_main-layout"
+    "outputFileName": "wwwroot/js/standalone.min.js",
+    "inputFiles": [ "wwwroot/js/standalone.js" ]
   }
 ]
 ```
+
+The `bundles` of a layout hold both bundles and other layouts, which may
+nest as deep as needed. A bundle uses every layout it is nested in, and
+bundles at the top level use no layout. `bundles` may be empty or left
+out, e.g. for a layout that has no pages yet.
 
 Which files a layout contributes depends on the extension of the
 `outputFileName`. JavaScript bundles use `preambles` and `postscripts`,
 CSS bundles use `styles`, and other bundles take no files from layouts.
 
 For JavaScript bundles the `preambles` are bundled before the `inputFiles`
-and the `postscripts` after them. A layout can reference another layout,
-in which case the outer layout wraps the inner one, so the JavaScript
-bundle above is built from:
+and the `postscripts` after them. The outer layout wraps the inner one,
+so the JavaScript bundle `polyfill.min.js` above is built from:
 
 1. `wwwroot/js/common.js` (`_layout` preambles)
 2. `wwwroot/js/_main-layout.js` (`_main-layout` preambles)
@@ -177,12 +186,21 @@ inwards, before the `inputFiles`. The CSS bundle above is built from:
 3. `wwwroot/css/polyfill.css` (`inputFiles`)
 
 Layout files support the same globbing and `!` exclusion patterns as
-`inputFiles`. Referencing an undefined layout, defining the same layout
-name twice or a circular layout reference makes the configuration file
-invalid, and the reason is reported. A bundle whose only input file is
-its own output file takes no files from layouts, as they would be
-written into that file. Layouts are not supported by `gulpfile.js`
-created by *Convert to Gulp*.
+`inputFiles`. Defining the same layout name twice anywhere in the file
+makes the configuration file invalid, and the reason is reported. A
+bundle whose only input file is its own output file takes no files from
+layouts, as they would be written into that file. Bundles created from
+Visual Studio are added at the top level; one that replaces a nested
+bundle with the same `outputFileName` stays in its layout. Layouts are
+not supported by `gulpfile.js` created by *Convert to Gulp*.
+
+#### Migrating from 4.x
+
+Version 5 no longer supports picking a layout by name. Move each bundle
+with a `layout` property into the `bundles` of that layout, and each
+layout with a `layout` property into the `bundles` of its parent layout.
+A `layout` property left on a bundle, a layout or a variant makes the
+configuration file invalid, so no bundle silently loses its layout files.
 
 #### Layout variants
 
@@ -194,7 +212,6 @@ picks one with the optional `variant` property:
 [
   {
     "_main-layout": {
-      "layout": "_layout",
       "preambles": [ "wwwroot/js/_main-layout.js" ],
       "styles": [
         "wwwroot/css/mobile.css",
@@ -207,36 +224,37 @@ picks one with the optional `variant` property:
             "wwwroot/css/promo-ad.css"
           ]
         }
-      }
+      },
+      "bundles": [
+        {
+          "_article-layout": {
+            "styles": [ "wwwroot/css/article.css" ],
+            "bundles": [
+              {
+                "outputFileName": "wwwroot/css/article-v.min.css",
+                "inputFiles": [ "wwwroot/css/article-page.css" ],
+                "variant": "vertical"
+              }
+            ]
+          }
+        }
+      ]
     }
-  },
-  {
-    "_article-layout": {
-      "layout": "_main-layout",
-      "styles": [ "wwwroot/css/article.css" ]
-    }
-  },
-  {
-    "outputFileName": "wwwroot/css/article-v.min.css",
-    "inputFiles": [ "wwwroot/css/article-page.css" ],
-    "layout": "_article-layout",
-    "variant": "vertical"
   }
 ]
 ```
 
-The variant applies to the whole layout chain, however many layouts are
-in between: every layout that defines it uses the variant, the others
-use their own files. Bundles without a `variant` use the files of the
-layouts as before.
+The variant applies to every layout the bundle is nested in, however many
+layouts are in between: every layout that defines it uses the variant,
+the others use their own files. Bundles without a `variant` use the files
+of the layouts as before.
 
 - A variant replaces the `preambles`, `postscripts` and `styles` it lists
   as a whole and keeps the ones it leaves out, so the JavaScript bundles
   of the page above can set the same `variant` and get the same files.
   An empty list means the variant takes no files of that kind.
-- A variant can set `layout` to wrap the layout in another parent layout.
-- A `variant` that no layout in the chain defines makes the configuration
-  file invalid.
+- A `variant` that no layout the bundle is nested in defines makes the
+  configuration file invalid.
 
 ### Task Runner Explorer
 Get a quick overview of the files you've specified or execute a bundle

@@ -49,7 +49,7 @@ namespace BundlerMinifier
             }
             catch (InvalidDataException ex)
             {
-                // the config file itself is invalid, e.g. a bundle references a layout that is not defined
+                // the config file itself is invalid, e.g. a bundle sets a variant that no layout it is in defines
                 Log.LogError("Bundler: " + ex.Message);
                 return false;
             }

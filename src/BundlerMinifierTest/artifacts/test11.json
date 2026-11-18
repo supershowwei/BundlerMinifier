@@ -6,28 +6,30 @@
       ],
       "postscripts": [
         "file6.js"
-      ]
-    }
-  },
-  {
-    "_inner": {
-      "layout": "_outer",
-      "preambles": [
-        "file2.js"
       ],
-      "postscripts": [
-        "minify.js"
+      "bundles": [
+        {
+          "_inner": {
+            "preambles": [
+              "file2.js"
+            ],
+            "postscripts": [
+              "minify.js"
+            ],
+            "bundles": [
+              {
+                "outputFileName": "test11.js",
+                "inputFiles": [
+                  "file4.js"
+                ],
+                "minify": {
+                  "enabled": false
+                }
+              }
+            ]
+          }
+        }
       ]
     }
-  },
-  {
-    "outputFileName": "test11.js",
-    "inputFiles": [
-      "file4.js"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner"
   }
 ]

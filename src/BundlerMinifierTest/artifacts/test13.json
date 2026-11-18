@@ -19,80 +19,56 @@
             "test2/foo.css"
           ]
         }
-      }
-    }
-  },
-  {
-    "_other": {
-      "preambles": [
-        "file3.js"
+      },
+      "bundles": [
+        {
+          "_inner": {
+            "preambles": [
+              "file2.js"
+            ],
+            "bundles": [
+              {
+                "outputFileName": "test13.js",
+                "inputFiles": [
+                  "file4.js"
+                ],
+                "minify": {
+                  "enabled": false
+                }
+              },
+              {
+                "outputFileName": "test13.css",
+                "inputFiles": [
+                  "file2.css"
+                ],
+                "minify": {
+                  "enabled": false
+                }
+              },
+              {
+                "outputFileName": "test13-alt.js",
+                "inputFiles": [
+                  "file4.js"
+                ],
+                "minify": {
+                  "enabled": false
+                },
+                "variant": "alt"
+              },
+              {
+                "outputFileName": "test13-alt.css",
+                "inputFiles": [
+                  "file2.css"
+                ],
+                "minify": {
+                  "enabled": false
+                },
+                "variant": "alt"
+              }
+            ]
+          }
+        }
       ]
     }
-  },
-  {
-    "_inner": {
-      "layout": "_outer",
-      "preambles": [
-        "file2.js"
-      ],
-      "variants": {
-        "swap": {
-          "layout": "_other"
-        }
-      }
-    }
-  },
-  {
-    "outputFileName": "test13.js",
-    "inputFiles": [
-      "file4.js"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner"
-  },
-  {
-    "outputFileName": "test13.css",
-    "inputFiles": [
-      "file2.css"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner"
-  },
-  {
-    "outputFileName": "test13-alt.js",
-    "inputFiles": [
-      "file4.js"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner",
-    "variant": "alt"
-  },
-  {
-    "outputFileName": "test13-alt.css",
-    "inputFiles": [
-      "file2.css"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner",
-    "variant": "alt"
-  },
-  {
-    "outputFileName": "test13-swap.js",
-    "inputFiles": [
-      "file4.js"
-    ],
-    "minify": {
-      "enabled": false
-    },
-    "layout": "_inner",
-    "variant": "swap"
   }
 ]

@@ -513,7 +513,6 @@ namespace BundlerMinifierTest
             var bundle = new Bundle();
             bundle.OutputFileName = _guid + ".js";
             bundle.InputFiles.Add("file1.js");
-            bundle.Layout = "_outer";
 
             string filePath = "../../../artifacts/" + _guid + ".json";
             File.Copy(TEST_BUNDLE.Replace("test1", "test11"), filePath);
@@ -524,43 +523,106 @@ namespace BundlerMinifierTest
             Assert.AreEqual(2, bundles.Count());
             Assert.AreEqual(5, bundles.Single(b => b.OutputFileName == "test11.js").AllInputFiles.Count());
 
+            // a new bundle goes to the top level, outside of any layout
             var added = bundles.Single(b => b.OutputFileName == bundle.OutputFileName);
-            Assert.AreEqual("_outer", added.Layout);
-            CollectionAssert.AreEqual(new[] { "file1.js", "file1.js", "file6.js" }, added.AllInputFiles.ToList());
+            Assert.IsNull(added.Layout);
+            CollectionAssert.AreEqual(new[] { "file1.js" }, added.AllInputFiles.ToList());
 
             BundleHandler.RemoveBundle(filePath, added);
             bundles = BundleHandler.GetBundles(filePath);
             Assert.AreEqual(1, bundles.Count());
             Assert.AreEqual(5, bundles.Single().AllInputFiles.Count());
+
+            // 移除巢狀的 bundle 後 layout 照樣留著，bundles 變成空陣列也是有效的設定檔
+            BundleHandler.RemoveBundle(filePath, bundles.Single());
+            Assert.IsTrue(BundleHandler.TryGetBundles(filePath, out bundles, out string error), error);
+            Assert.AreEqual(0, bundles.Count());
+            StringAssert.Contains(File.ReadAllText(filePath), "\"_inner\"");
         }
 
         [TestMethod]
-        public void InvalidLayoutReference()
+        public void GetBundlesWithNestedLayouts()
+        {
+            string filePath = "../../../artifacts/" + _guid + ".json";
+
+            // 一個項目可以定義多個 layout；bundles 可以不寫或是空陣列；最上層可以同時放 layout 與獨立的 bundle
+            File.WriteAllText(filePath, @"[
+                { ""_a"": { ""preambles"": [""file1.js""], ""bundles"": [
+                    { ""outputFileName"": ""a.js"", ""inputFiles"": [""file4.js""] },
+                    { ""_b"": { ""preambles"": [""file2.js""], ""bundles"": [
+                        { ""_c"": { ""postscripts"": [""file6.js""], ""bundles"": [
+                            { ""outputFileName"": ""c.js"", ""inputFiles"": [""file4.js""] }
+                        ] } },
+                        { ""outputFileName"": ""b.js"", ""inputFiles"": [""file4.js""] }
+                    ] } }
+                ] },
+                  ""_empty"": { ""preambles"": [""file3.js""], ""bundles"": [] },
+                  ""_pending"": { ""preambles"": [""file3.js""] } },
+                { ""outputFileName"": ""top.js"", ""inputFiles"": [""file4.js""] }
+            ]");
+
+            Assert.IsTrue(BundleHandler.TryGetBundles(filePath, out var read, out string error), error);
+            var bundles = read.ToList();
+
+            // 依文件順序（深度優先）列出
+            CollectionAssert.AreEqual(new[] { "a.js", "c.js", "b.js", "top.js" }, bundles.Select(b => b.OutputFileName).ToList());
+
+            CollectionAssert.AreEqual(new[] { "file1.js", "file4.js" }, bundles[0].AllInputFiles.ToList());
+            CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js", "file6.js" }, bundles[1].AllInputFiles.ToList());
+            CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js" }, bundles[2].AllInputFiles.ToList());
+            CollectionAssert.AreEqual(new[] { "file4.js" }, bundles[3].AllInputFiles.ToList());
+
+            Assert.AreEqual("_c", bundles[1].Layout.Name);
+            Assert.AreEqual("_b", bundles[1].Layout.Parent.Name);
+            Assert.AreEqual("_a", bundles[1].Layout.Parent.Parent.Name);
+            Assert.IsNull(bundles[1].Layout.Parent.Parent.Parent);
+            Assert.IsNull(bundles[3].Layout);
+        }
+
+        [TestMethod]
+        public void InvalidLayoutDefinition()
         {
             string filePath = "../../../artifacts/" + _guid + ".json";
 
             string error;
 
-            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_missing\" }]");
+            // 舊版以 "layout" 指名上層 layout 的寫法不再支援，直接視為設定檔無效，不會默默少掉 layout 的檔案
+            File.WriteAllText(filePath, "[{ \"_a\": { } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_a\" }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _));
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
-            StringAssert.Contains(error, "\"_missing\" referenced by foo.js");
+            StringAssert.Contains(error, "\"layout\" property of foo.js is no longer supported");
 
-            File.WriteAllText(filePath, "[{ \"_a\": { \"layout\": \"_b\" }, \"_b\": { \"layout\": \"_a\" } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_a\" }]");
-            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _));
+            File.WriteAllText(filePath, "[{ \"_a\": { \"bundles\": [{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"], \"layout\": \"_a\" }] } }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
-            StringAssert.Contains(error, "_a -> _b -> _a");
+            StringAssert.Contains(error, "\"layout\" property of foo.js is no longer supported");
 
+            File.WriteAllText(filePath, "[{ \"_a\": { }, \"_b\": { \"layout\": \"_a\" } }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"layout\" property of the layout \"_b\" is no longer supported");
+
+            File.WriteAllText(filePath, "[{ \"_a\": { }, \"_b\": { \"variants\": { \"v\": { \"layout\": \"_a\" } } } }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"layout\" property of the variant \"v\" of the layout \"_b\" is no longer supported");
+
+            // layout 名稱在整份設定檔中不可重複，不論在哪一層
             File.WriteAllText(filePath, "[{ \"_a\": { } }, { \"_a\": { } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
             StringAssert.Contains(error, "\"_a\" is defined more than once");
+
+            File.WriteAllText(filePath, "[{ \"_a\": { \"bundles\": [{ \"_b\": { \"bundles\": [{ \"_a\": { } }] } }] } }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"_a\" is defined more than once");
+
+            File.WriteAllText(filePath, "[{ \"_a\": { \"bundles\": { \"outputFileName\": \"foo.js\" } } }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"bundles\" of the layout \"_a\" must be an array");
         }
 
         [TestMethod]
         public void GetBundlesWithLayoutVariant()
         {
             var bundles = BundleHandler.GetBundles(TEST_BUNDLE.Replace("test1", "test13")).ToDictionary(b => b.OutputFileName);
-            Assert.AreEqual(5, bundles.Count);
+            Assert.AreEqual(4, bundles.Count);
 
             // 沒指定 variant 時，有定義變體的 layout 照常使用預設內容
             CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js", "file6.js" }, bundles["test13.js"].AllInputFiles.ToList());
@@ -570,9 +632,6 @@ namespace BundlerMinifierTest
             // 變體沒寫的 preambles 沿用 _outer 的預設值
             CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js", "minify.js" }, bundles["test13-alt.js"].AllInputFiles.ToList());
             CollectionAssert.AreEqual(new[] { "test2/foo.css", "file2.css" }, bundles["test13-alt.css"].AllInputFiles.ToList());
-
-            // 變體可以改接別的上層 layout
-            CollectionAssert.AreEqual(new[] { "file3.js", "file2.js", "file4.js" }, bundles["test13-swap.js"].AllInputFiles.ToList());
         }
 
         [TestMethod]
@@ -600,61 +659,63 @@ namespace BundlerMinifierTest
             string error;
 
             // 變體寫空陣列表示不加任何檔案，跟沒寫（沿用預設值）不同
-            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"postscripts\": [\"file2.js\"], \"variants\": { \"v\": { \"preambles\": [] } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\", \"variant\": \"v\" }]");
+            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"postscripts\": [\"file2.js\"], \"variants\": { \"v\": { \"preambles\": [] } }, \"bundles\": [{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"variant\": \"v\" }] } }]");
             CollectionAssert.AreEqual(new[] { "file4.js", "file2.js" }, BundleHandler.GetBundles(filePath).Single().AllInputFiles.ToList());
 
             // 寫成 null 的變體視為有定義，全部沿用預設值
-            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"variants\": { \"v\": null } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\", \"variant\": \"v\" }]");
+            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"variants\": { \"v\": null }, \"bundles\": [{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"variant\": \"v\" }] } }]");
             CollectionAssert.AreEqual(new[] { "file1.js", "file4.js" }, BundleHandler.GetBundles(filePath).Single().AllInputFiles.ToList());
 
             // 指定的變體在整條鏈上都沒有定義，設定檔無效
-            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"variants\": { \"v\": { } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\", \"variant\": \"nope\" }]");
+            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"variants\": { \"v\": { } }, \"bundles\": [{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"variant\": \"nope\" }] } }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
             StringAssert.Contains(error, "\"nope\" set by foo.js");
+
+            // 變體只定義在別的分支的 layout 上，同樣算找不到
+            File.WriteAllText(filePath, "[{ \"_l\": { \"bundles\": [{ \"_x\": { \"variants\": { \"v\": { } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"variant\": \"v\" }] } }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"v\" set by foo.js");
 
             // 沒有 layout 卻指定 variant，一樣找不到這個變體
             File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"variant\": \"v\" }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
             StringAssert.Contains(error, "\"v\" set by foo.js");
-
-            // 變體改接上層 layout 造成的迴圈一樣會被擋下來
-            File.WriteAllText(filePath, "[{ \"_a\": { \"layout\": \"_b\" }, \"_b\": { \"variants\": { \"v\": { \"layout\": \"_a\" } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_a\", \"variant\": \"v\" }]");
-            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
-            StringAssert.Contains(error, "_a -> _b -> _a");
-
-            // 同一份設定不指定 variant 時沒有迴圈
-            File.WriteAllText(filePath, "[{ \"_a\": { \"layout\": \"_b\" }, \"_b\": { \"variants\": { \"v\": { \"layout\": \"_a\" } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_a\" }]");
-            Assert.IsTrue(BundleHandler.TryGetBundles(filePath, out _, out error), error);
         }
 
         [TestMethod]
         public void AddBundlePreservesLayoutVariants()
         {
+            // 與巢狀 bundle 同名的 bundle 就地取代，留在原本的 layout 下
             var bundle = new Bundle();
-            bundle.OutputFileName = _guid + ".css";
-            bundle.InputFiles.Add("file2.css");
-            bundle.Layout = "_inner";
+            bundle.OutputFileName = "test13-alt.css";
+            bundle.InputFiles.Add("file1.css");
             bundle.Variant = "alt";
+
+            var other = new Bundle();
+            other.OutputFileName = _guid + ".css";
+            other.InputFiles.Add("file2.css");
 
             string filePath = "../../../artifacts/" + _guid + ".json";
             File.Copy(TEST_BUNDLE.Replace("test1", "test13"), filePath);
             BundleHandler.AddBundle(filePath, bundle);
+            BundleHandler.AddBundle(filePath, other);
 
             // layout 的 variants 與既有 bundle 的 variant 都要在改寫後保留下來，沒指定的不會被寫出 variant
             string content = File.ReadAllText(filePath);
-            Assert.AreEqual(4, content.Split(new[] { "\"variant\":" }, StringSplitOptions.None).Length - 1);
+            Assert.AreEqual(2, content.Split(new[] { "\"variant\":" }, StringSplitOptions.None).Length - 1);
+            Assert.AreEqual(1, content.Split(new[] { "test13-alt.css" }, StringSplitOptions.None).Length - 1);
 
             var bundles = BundleHandler.GetBundles(filePath).ToDictionary(b => b.OutputFileName);
-            Assert.AreEqual(6, bundles.Count);
-            CollectionAssert.AreEqual(new[] { "test2/foo.css", "file2.css" }, bundles["test13-alt.css"].AllInputFiles.ToList());
-            Assert.AreEqual("alt", bundles[bundle.OutputFileName].Variant);
-            CollectionAssert.AreEqual(new[] { "test2/foo.css", "file2.css" }, bundles[bundle.OutputFileName].AllInputFiles.ToList());
-
-            BundleHandler.RemoveBundle(filePath, bundles[bundle.OutputFileName]);
-            bundles = BundleHandler.GetBundles(filePath).ToDictionary(b => b.OutputFileName);
             Assert.AreEqual(5, bundles.Count);
-            Assert.AreEqual("swap", bundles["test13-swap.js"].Variant);
-            CollectionAssert.AreEqual(new[] { "file3.js", "file2.js", "file4.js" }, bundles["test13-swap.js"].AllInputFiles.ToList());
+            Assert.AreEqual("_inner", bundles["test13-alt.css"].Layout.Name);
+            CollectionAssert.AreEqual(new[] { "test2/foo.css", "file1.css" }, bundles["test13-alt.css"].AllInputFiles.ToList());
+            CollectionAssert.AreEqual(new[] { "file2.css" }, bundles[other.OutputFileName].AllInputFiles.ToList());
+
+            BundleHandler.RemoveBundle(filePath, bundles["test13-alt.css"]);
+            bundles = BundleHandler.GetBundles(filePath).ToDictionary(b => b.OutputFileName);
+            Assert.AreEqual(4, bundles.Count);
+            Assert.AreEqual("alt", bundles["test13-alt.js"].Variant);
+            CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js", "minify.js" }, bundles["test13-alt.js"].AllInputFiles.ToList());
         }
 
         [TestMethod]
@@ -672,11 +733,11 @@ namespace BundlerMinifierTest
             int deleted = 0;
             _processor.AfterDeletingMinFile += (s, e) => deleted++;
 
-            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"], \"layout\": \"_missing\" }]");
+            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"], \"variant\": \"_missing\" }]");
             File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow.AddSeconds(1));
 
             var ex = Assert.ThrowsExactly<InvalidDataException>(() => _processor.Process(filePath));
-            StringAssert.Contains(ex.Message, "\"_missing\" referenced by foo.css");
+            StringAssert.Contains(ex.Message, "\"_missing\" set by foo.css");
 
             // an unreadable config file does not count as every bundle having been removed from it
             Assert.AreEqual(0, deleted);
@@ -692,14 +753,14 @@ namespace BundlerMinifierTest
             _processor.SourceFileChanged(filePath, "../../../artifacts/file1.js");
             _processor.Clean(filePath);
 
-            // an invalid config file says why, instead of ending in a NullReferenceException
+            // an invalid config file, e.g. one still in the 4.x format, says why instead of ending in a NullReferenceException
             File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"], \"layout\": \"_missing\" }]");
 
             var ex = Assert.ThrowsExactly<InvalidDataException>(() => _processor.SourceFileChanged(filePath, "../../../artifacts/file1.css"));
-            StringAssert.Contains(ex.Message, "\"_missing\" referenced by foo.css");
+            StringAssert.Contains(ex.Message, "\"layout\" property of foo.css is no longer supported");
 
             ex = Assert.ThrowsExactly<InvalidDataException>(() => _processor.Clean(filePath));
-            StringAssert.Contains(ex.Message, "\"_missing\" referenced by foo.css");
+            StringAssert.Contains(ex.Message, "\"layout\" property of foo.css is no longer supported");
         }
 
         [TestMethod]
@@ -708,13 +769,13 @@ namespace BundlerMinifierTest
             string filePath = "../../../artifacts/" + _guid + ".json";
             string source = "../../../artifacts/foo.js";
             string minFile = "../../../artifacts/foo.min.js";
-            string layout = "{ \"_l\": { \"preambles\": [\"file1.js\"], \"postscripts\": [\"file2.js\"] } }";
+            string layout = "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"postscripts\": [\"file2.js\"], \"bundles\": [{0}] } }]";
 
             // ./foo.js 與 foo.js 是同一個檔案，兩種寫法都算
             foreach (string input in new[] { "foo.js", "./foo.js" })
             {
                 File.WriteAllText(source, "var foo = 1;");
-                File.WriteAllText(filePath, "[" + layout + ", { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"" + input + "\"], \"layout\": \"_l\" }]");
+                File.WriteAllText(filePath, layout.Replace("{0}", "{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"" + input + "\"] }"));
 
                 var bundle = BundleHandler.GetBundles(filePath).Single();
                 CollectionAssert.AreEqual(new[] { input }, bundle.AllInputFiles.ToList());
@@ -728,7 +789,7 @@ namespace BundlerMinifierTest
             }
 
             // 同一個 layout 套在一般的 bundle 上不受影響
-            File.WriteAllText(filePath, "[" + layout + ", { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\" }]");
+            File.WriteAllText(filePath, layout.Replace("{0}", "{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"] }"));
             CollectionAssert.AreEqual(new[] { "file1.js", "file4.js", "file2.js" }, BundleHandler.GetBundles(filePath).Single().AllInputFiles.ToList());
         }
     }
