@@ -36,6 +36,13 @@ namespace BundlerMinifier
         [JsonProperty("layout")]
         public string Layout { get; set; }
 
+        /// <summary>
+        /// 可選，要使用的 layout 變體名稱。layout 鏈上每個有定義這個變體的 layout 都改用變體的設定，
+        /// 沒定義的照常使用預設內容。
+        /// </summary>
+        [JsonProperty("variant")]
+        public string Variant { get; set; }
+
         /// <summary>Files from the layout chain placed before the input files. Resolved when the config is read.</summary>
         [JsonIgnore]
         public List<string> LayoutPreambles { get; } = new List<string>();
@@ -263,6 +270,12 @@ namespace BundlerMinifier
         public bool ShouldSerializeLayout()
         {
             return !string.IsNullOrEmpty(Layout);
+        }
+
+        /// <summary>For the JSON.NET serializer</summary>
+        public bool ShouldSerializeVariant()
+        {
+            return !string.IsNullOrEmpty(Variant);
         }
 
         /// <summary>For the JSON.NET serializer</summary>

@@ -26,6 +26,13 @@ namespace BundlerMinifier
         public List<string> Styles { get; } = new List<string>();
 
         /// <summary>
+        /// 可選的變體，以名稱為鍵。bundle 用 <see cref="Bundle.Variant"/> 指定名稱時，
+        /// layout 鏈上每個有定義這個變體的 layout 都改用它的設定，沒定義的照常用自己的預設內容。
+        /// </summary>
+        [JsonProperty("variants")]
+        public Dictionary<string, BundleLayoutVariant> Variants { get; } = new Dictionary<string, BundleLayoutVariant>(StringComparer.Ordinal);
+
+        /// <summary>
         /// A layout entry is an object without an outputFileName whose properties are all objects,
         /// each property being the definition of a layout keyed by its name.
         /// </summary>
@@ -44,6 +51,8 @@ namespace BundlerMinifier
         /// JS bundle 由外層 layout 包住內層，最外層的 preambles 最先、postscripts 最後；
         /// CSS bundle 只把 styles 由外往內疊加在 inputFiles 之前；其他類型不套用 layout 檔案。
         /// 輸出檔就是自己唯一輸入檔的 bundle 也不套用，但 layout 鏈照樣會走過一遍，參照錯誤一樣會被擋下來。
+        /// bundle 有指定 variant 時，每一層 layout 若有定義同名變體，就由變體決定這一層的檔案清單與上層 layout；
+        /// 指定的變體在實際走過的整條鏈上都沒有定義時，設定檔無效。
         /// </summary>
         internal static void Apply(Bundle bundle, IDictionary<string, BundleLayout> layouts)
         {
@@ -54,6 +63,10 @@ namespace BundlerMinifier
             bool takesFiles = !IsOwnOutput(bundle);
             bool isJavaScript = takesFiles && string.Equals(extension, ".js", StringComparison.OrdinalIgnoreCase);
             bool isCss = takesFiles && string.Equals(extension, ".css", StringComparison.OrdinalIgnoreCase);
+
+            string variantName = bundle.Variant;
+            bool hasVariant = !string.IsNullOrEmpty(variantName);
+            bool variantFound = false;
 
             var visited = new List<string>();
             string name = bundle.Layout;
@@ -70,18 +83,27 @@ namespace BundlerMinifier
 
                 visited.Add(name);
 
+                // 寫成 "v": null 的變體視為空的變體，全部沿用預設內容
+                BundleLayoutVariant variant = null;
+
+                if (hasVariant && layout.Variants.TryGetValue(variantName, out variant))
+                    variantFound = true;
+
                 if (isJavaScript)
                 {
-                    bundle.LayoutPreambles.InsertRange(0, layout.Preambles);
-                    bundle.LayoutPostscripts.AddRange(layout.Postscripts);
+                    bundle.LayoutPreambles.InsertRange(0, variant?.Preambles ?? layout.Preambles);
+                    bundle.LayoutPostscripts.AddRange(variant?.Postscripts ?? layout.Postscripts);
                 }
                 else if (isCss)
                 {
-                    bundle.LayoutPreambles.InsertRange(0, layout.Styles);
+                    bundle.LayoutPreambles.InsertRange(0, variant?.Styles ?? layout.Styles);
                 }
 
-                name = layout.Layout;
+                name = variant?.Layout ?? layout.Layout;
             }
+
+            if (hasVariant && !variantFound)
+                throw new InvalidOperationException($"The variant \"{variantName}\" set by {bundle.OutputFileName} is not defined by any layout it uses");
         }
 
         /// <summary>

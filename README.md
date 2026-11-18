@@ -184,6 +184,60 @@ its own output file takes no files from layouts, as they would be
 written into that file. Layouts are not supported by `gulpfile.js`
 created by *Convert to Gulp*.
 
+#### Layout variants
+
+Layouts that differ in only a few files don't have to be defined twice.
+A layout can define optional `variants`, keyed by name, and a bundle
+picks one with the optional `variant` property:
+
+```json
+[
+  {
+    "_main-layout": {
+      "layout": "_layout",
+      "preambles": [ "wwwroot/js/_main-layout.js" ],
+      "styles": [
+        "wwwroot/css/mobile.css",
+        "wwwroot/css/promo-ad.css"
+      ],
+      "variants": {
+        "vertical": {
+          "styles": [
+            "wwwroot/css/mobile-v.css",
+            "wwwroot/css/promo-ad.css"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "_article-layout": {
+      "layout": "_main-layout",
+      "styles": [ "wwwroot/css/article.css" ]
+    }
+  },
+  {
+    "outputFileName": "wwwroot/css/article-v.min.css",
+    "inputFiles": [ "wwwroot/css/article-page.css" ],
+    "layout": "_article-layout",
+    "variant": "vertical"
+  }
+]
+```
+
+The variant applies to the whole layout chain, however many layouts are
+in between: every layout that defines it uses the variant, the others
+use their own files. Bundles without a `variant` use the files of the
+layouts as before.
+
+- A variant replaces the `preambles`, `postscripts` and `styles` it lists
+  as a whole and keeps the ones it leaves out, so the JavaScript bundles
+  of the page above can set the same `variant` and get the same files.
+  An empty list means the variant takes no files of that kind.
+- A variant can set `layout` to wrap the layout in another parent layout.
+- A `variant` that no layout in the chain defines makes the configuration
+  file invalid.
+
 ### Task Runner Explorer
 Get a quick overview of the files you've specified or execute a bundle
 directly in Task Runner Explorer.

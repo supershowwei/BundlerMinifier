@@ -46,6 +46,11 @@ namespace BundlerMinifierTest
             File.Delete("../../../artifacts/test11.js");
             File.Delete("../../../artifacts/test12.css");
             File.Delete("../../../artifacts/test12.js");
+            File.Delete("../../../artifacts/test13.js");
+            File.Delete("../../../artifacts/test13.css");
+            File.Delete("../../../artifacts/test13-alt.js");
+            File.Delete("../../../artifacts/test13-alt.css");
+            File.Delete("../../../artifacts/test13-swap.js");
         }
 
         [TestMethod]
@@ -549,6 +554,107 @@ namespace BundlerMinifierTest
             File.WriteAllText(filePath, "[{ \"_a\": { } }, { \"_a\": { } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }]");
             Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
             StringAssert.Contains(error, "\"_a\" is defined more than once");
+        }
+
+        [TestMethod]
+        public void GetBundlesWithLayoutVariant()
+        {
+            var bundles = BundleHandler.GetBundles(TEST_BUNDLE.Replace("test1", "test13")).ToDictionary(b => b.OutputFileName);
+            Assert.AreEqual(5, bundles.Count);
+
+            // 沒指定 variant 時，有定義變體的 layout 照常使用預設內容
+            CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js", "file6.js" }, bundles["test13.js"].AllInputFiles.ToList());
+            CollectionAssert.AreEqual(new[] { "file1.css", "file2.css" }, bundles["test13.css"].AllInputFiles.ToList());
+
+            // 指定 variant 時，外層 _outer 改用變體，沒定義這個變體的 _inner 照常使用預設內容；
+            // 變體沒寫的 preambles 沿用 _outer 的預設值
+            CollectionAssert.AreEqual(new[] { "file1.js", "file2.js", "file4.js", "minify.js" }, bundles["test13-alt.js"].AllInputFiles.ToList());
+            CollectionAssert.AreEqual(new[] { "test2/foo.css", "file2.css" }, bundles["test13-alt.css"].AllInputFiles.ToList());
+
+            // 變體可以改接別的上層 layout
+            CollectionAssert.AreEqual(new[] { "file3.js", "file2.js", "file4.js" }, bundles["test13-swap.js"].AllInputFiles.ToList());
+        }
+
+        [TestMethod]
+        public void ProcessWithLayoutVariant()
+        {
+            _processor.Process(TEST_BUNDLE.Replace("test1", "test13"));
+
+            string cssResult = File.ReadAllText("../../../artifacts/test13-alt.css");
+            int[] positions = new[] { "test2/image.png?foo=hat", "display: block" }
+                .Select(s => cssResult.IndexOf(s, StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.IsTrue(positions.All(p => p > -1));
+            CollectionAssert.AreEqual(positions.OrderBy(p => p).ToArray(), positions);
+            Assert.IsFalse(cssResult.Contains("url('/test.png')"));
+
+            // 同一組 layout 沒指定 variant 的 bundle 不受影響
+            Assert.IsTrue(File.ReadAllText("../../../artifacts/test13.css").Contains("url('/test.png')"));
+        }
+
+        [TestMethod]
+        public void LayoutVariantEdgeCases()
+        {
+            string filePath = "../../../artifacts/" + _guid + ".json";
+            string error;
+
+            // 變體寫空陣列表示不加任何檔案，跟沒寫（沿用預設值）不同
+            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"postscripts\": [\"file2.js\"], \"variants\": { \"v\": { \"preambles\": [] } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\", \"variant\": \"v\" }]");
+            CollectionAssert.AreEqual(new[] { "file4.js", "file2.js" }, BundleHandler.GetBundles(filePath).Single().AllInputFiles.ToList());
+
+            // 寫成 null 的變體視為有定義，全部沿用預設值
+            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"variants\": { \"v\": null } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\", \"variant\": \"v\" }]");
+            CollectionAssert.AreEqual(new[] { "file1.js", "file4.js" }, BundleHandler.GetBundles(filePath).Single().AllInputFiles.ToList());
+
+            // 指定的變體在整條鏈上都沒有定義，設定檔無效
+            File.WriteAllText(filePath, "[{ \"_l\": { \"preambles\": [\"file1.js\"], \"variants\": { \"v\": { } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_l\", \"variant\": \"nope\" }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"nope\" set by foo.js");
+
+            // 沒有 layout 卻指定 variant，一樣找不到這個變體
+            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"variant\": \"v\" }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "\"v\" set by foo.js");
+
+            // 變體改接上層 layout 造成的迴圈一樣會被擋下來
+            File.WriteAllText(filePath, "[{ \"_a\": { \"layout\": \"_b\" }, \"_b\": { \"variants\": { \"v\": { \"layout\": \"_a\" } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_a\", \"variant\": \"v\" }]");
+            Assert.IsFalse(BundleHandler.TryGetBundles(filePath, out _, out error));
+            StringAssert.Contains(error, "_a -> _b -> _a");
+
+            // 同一份設定不指定 variant 時沒有迴圈
+            File.WriteAllText(filePath, "[{ \"_a\": { \"layout\": \"_b\" }, \"_b\": { \"variants\": { \"v\": { \"layout\": \"_a\" } } } }, { \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file4.js\"], \"layout\": \"_a\" }]");
+            Assert.IsTrue(BundleHandler.TryGetBundles(filePath, out _, out error), error);
+        }
+
+        [TestMethod]
+        public void AddBundlePreservesLayoutVariants()
+        {
+            var bundle = new Bundle();
+            bundle.OutputFileName = _guid + ".css";
+            bundle.InputFiles.Add("file2.css");
+            bundle.Layout = "_inner";
+            bundle.Variant = "alt";
+
+            string filePath = "../../../artifacts/" + _guid + ".json";
+            File.Copy(TEST_BUNDLE.Replace("test1", "test13"), filePath);
+            BundleHandler.AddBundle(filePath, bundle);
+
+            // layout 的 variants 與既有 bundle 的 variant 都要在改寫後保留下來，沒指定的不會被寫出 variant
+            string content = File.ReadAllText(filePath);
+            Assert.AreEqual(4, content.Split(new[] { "\"variant\":" }, StringSplitOptions.None).Length - 1);
+
+            var bundles = BundleHandler.GetBundles(filePath).ToDictionary(b => b.OutputFileName);
+            Assert.AreEqual(6, bundles.Count);
+            CollectionAssert.AreEqual(new[] { "test2/foo.css", "file2.css" }, bundles["test13-alt.css"].AllInputFiles.ToList());
+            Assert.AreEqual("alt", bundles[bundle.OutputFileName].Variant);
+            CollectionAssert.AreEqual(new[] { "test2/foo.css", "file2.css" }, bundles[bundle.OutputFileName].AllInputFiles.ToList());
+
+            BundleHandler.RemoveBundle(filePath, bundles[bundle.OutputFileName]);
+            bundles = BundleHandler.GetBundles(filePath).ToDictionary(b => b.OutputFileName);
+            Assert.AreEqual(5, bundles.Count);
+            Assert.AreEqual("swap", bundles["test13-swap.js"].Variant);
+            CollectionAssert.AreEqual(new[] { "file3.js", "file2.js", "file4.js" }, bundles["test13-swap.js"].AllInputFiles.ToList());
         }
 
         [TestMethod]

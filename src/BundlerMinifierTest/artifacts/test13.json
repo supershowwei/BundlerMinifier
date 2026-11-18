@@ -1,0 +1,98 @@
+[
+  {
+    "_outer": {
+      "preambles": [
+        "file1.js"
+      ],
+      "postscripts": [
+        "file6.js"
+      ],
+      "styles": [
+        "file1.css"
+      ],
+      "variants": {
+        "alt": {
+          "postscripts": [
+            "minify.js"
+          ],
+          "styles": [
+            "test2/foo.css"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "_other": {
+      "preambles": [
+        "file3.js"
+      ]
+    }
+  },
+  {
+    "_inner": {
+      "layout": "_outer",
+      "preambles": [
+        "file2.js"
+      ],
+      "variants": {
+        "swap": {
+          "layout": "_other"
+        }
+      }
+    }
+  },
+  {
+    "outputFileName": "test13.js",
+    "inputFiles": [
+      "file4.js"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner"
+  },
+  {
+    "outputFileName": "test13.css",
+    "inputFiles": [
+      "file2.css"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner"
+  },
+  {
+    "outputFileName": "test13-alt.js",
+    "inputFiles": [
+      "file4.js"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner",
+    "variant": "alt"
+  },
+  {
+    "outputFileName": "test13-alt.css",
+    "inputFiles": [
+      "file2.css"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner",
+    "variant": "alt"
+  },
+  {
+    "outputFileName": "test13-swap.js",
+    "inputFiles": [
+      "file4.js"
+    ],
+    "minify": {
+      "enabled": false
+    },
+    "layout": "_inner",
+    "variant": "swap"
+  }
+]
