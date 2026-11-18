@@ -684,6 +684,25 @@ namespace BundlerMinifierTest
         }
 
         [TestMethod]
+        public void SourceFileChangedAndCleanTellWhyTheConfigIsInvalid()
+        {
+            string filePath = "../../../artifacts/" + _guid + ".json";
+
+            // a config file that is not there is still nothing to do, as before
+            _processor.SourceFileChanged(filePath, "../../../artifacts/file1.js");
+            _processor.Clean(filePath);
+
+            // an invalid config file says why, instead of ending in a NullReferenceException
+            File.WriteAllText(filePath, "[{ \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"], \"layout\": \"_missing\" }]");
+
+            var ex = Assert.ThrowsExactly<InvalidDataException>(() => _processor.SourceFileChanged(filePath, "../../../artifacts/file1.css"));
+            StringAssert.Contains(ex.Message, "\"_missing\" referenced by foo.css");
+
+            ex = Assert.ThrowsExactly<InvalidDataException>(() => _processor.Clean(filePath));
+            StringAssert.Contains(ex.Message, "\"_missing\" referenced by foo.css");
+        }
+
+        [TestMethod]
         public void LayoutIsIgnoredWhenOutputIsTheOnlyInput()
         {
             string filePath = "../../../artifacts/" + _guid + ".json";

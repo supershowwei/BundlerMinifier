@@ -85,10 +85,16 @@ namespace BundlerMinifierVsix.Commands
                 return;
             }
 
-            var bundles = BundleHandler.GetBundles(configFile);
-
-            BundleFileProcessor processor = new BundleFileProcessor();
-            processor.Clean(configFile, bundles);
+            try
+            {
+                BundleFileProcessor processor = new BundleFileProcessor();
+                processor.Clean(configFile);
+            }
+            catch (InvalidDataException ex)
+            {
+                // the config file itself is invalid, the reason goes to the output window
+                Logger.Log(ex.Message);
+            }
         }
 
         private void Deletefile(string file)

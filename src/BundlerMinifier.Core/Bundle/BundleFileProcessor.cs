@@ -38,12 +38,7 @@ namespace BundlerMinifier
 
             if (bundles == null)
             {
-                string error;
-                bool read = BundleHandler.TryGetBundles(fileName, out bundles, out error);
-
-                // Says what is wrong with the config file, the bundles being null would only end in a NullReferenceException
-                if (bundles == null)
-                    throw new InvalidDataException($"{info.FullName} could not be read: {error}");
+                bool read = TryReadBundles(fileName, out bundles);
 
                 // With the whole config file at hand, a bundle remembered from an earlier read that is gone was removed from it
                 if (read)
@@ -56,6 +51,22 @@ namespace BundlerMinifier
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Reads the bundles of a config file, saying what is wrong with it when it is invalid,
+        /// as the bundles being null would only end in a NullReferenceException.
+        /// </summary>
+        /// <returns>False when there is no such file, in which case there are no bundles.</returns>
+        private static bool TryReadBundles(string fileName, out IEnumerable<Bundle> bundles)
+        {
+            string error;
+            bool read = BundleHandler.TryGetBundles(fileName, out bundles, out error);
+
+            if (bundles == null)
+                throw new InvalidDataException($"{new FileInfo(fileName).FullName} could not be read: {error}");
+
+            return read;
         }
 
         private bool DeleteMinFilesOfRemovedBundles(string configFile, IEnumerable<Bundle> bundles)
@@ -122,7 +133,9 @@ namespace BundlerMinifier
         public void Clean(string fileName, IEnumerable<Bundle> bundles = null)
         {
             FileInfo info = new FileInfo(fileName);
-            bundles = bundles ?? BundleHandler.GetBundles(fileName);
+
+            if (bundles == null)
+                TryReadBundles(fileName, out bundles);
 
             foreach (Bundle bundle in bundles)
             {
@@ -132,7 +145,8 @@ namespace BundlerMinifier
 
         public void SourceFileChanged(string bundleFile, string sourceFile)
         {
-            var bundles = BundleHandler.GetBundles(bundleFile);
+            IEnumerable<Bundle> bundles;
+            TryReadBundles(bundleFile, out bundles);
             string bundleFileFolder = Path.GetDirectoryName(bundleFile),
                    sourceFileFolder = Path.GetDirectoryName(sourceFile);
 

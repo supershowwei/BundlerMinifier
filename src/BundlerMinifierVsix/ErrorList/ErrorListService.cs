@@ -9,16 +9,32 @@ namespace BundlerMinifierVsix
     {
         public static void ProcessCompilerResults(MinificationResult result)
         {
-            BundlerMinifierPackage._dispatcher.BeginInvoke(new Action(() =>
+            // null until the package has finished loading in the background
+            var dispatcher = BundlerMinifierPackage._dispatcher;
+
+            if (dispatcher == null)
+                return;
+
+            dispatcher.BeginInvoke(new Action(() =>
             {
-                if (result.HasErrors)
+                // an exception escaping a dispatcher callback can terminate Visual Studio
+                try
                 {
-                    ErrorList.AddErrors(result.FileName, result.Errors);
+                    if (result.HasErrors)
+                    {
+                        ErrorList.AddErrors(result.FileName, result.Errors);
+                    }
+                    else
+                    {
+                        ErrorList.CleanErrors(result.FileName);
+
+                        if (BundlerMinifierPackage._dte != null)
+                            BundlerMinifierPackage._dte.StatusBar.Text = Resources.Text.StatusMinified.AddParams(Path.GetFileName(result.FileName));
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    ErrorList.CleanErrors(result.FileName);
-                    BundlerMinifierPackage._dte.StatusBar.Text = Resources.Text.StatusMinified.AddParams(Path.GetFileName(result.FileName));
+                    Logger.Log(ex);
                 }
             }), DispatcherPriority.ApplicationIdle, null);
         }

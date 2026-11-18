@@ -14,12 +14,19 @@ namespace BundlerMinifierVsix
     static class BundleService
     {
         private static BundleFileProcessor _processor;
-        private static DTE2 _dte;
+
+        /// <summary>
+        /// Read every time instead of being copied once: this class can be first used before the package
+        /// has finished loading in the background, e.g. by a bundleconfig.json restored in the editor,
+        /// and a copy taken then would stay null for the whole session.
+        /// </summary>
+        private static DTE2 _dte
+        {
+            get { return BundlerMinifierPackage._dte; }
+        }
 
         static BundleService()
         {
-            _dte = BundlerMinifierPackage._dte;
-
             BundleMinifier.BeforeWritingMinFile += CheckFileOutOfSourceControl;
             BundleMinifier.AfterWritingMinFile += AfterWritingFile;
             BundleMinifier.BeforeWritingGzipFile += CheckFileOutOfSourceControl;
@@ -200,18 +207,37 @@ namespace BundlerMinifierVsix
             });
         }
 
+        /// <summary>
+        /// Reports an exception thrown while processing a config file, e.g. one that is invalid.
+        /// This is async void, so anything escaping it terminates Visual Studio: it must never throw.
+        /// </summary>
         private static async void HandleProcessingException(string configFile, Exception ex)
         {
-            await BundlerMinifierPackage.IsPackageInitialized;
-            BundlerMinifierPackage._dispatcher.Invoke(new Action(() =>
+            try
             {
-                var errorMessage = Resources.Text.ErrorExceptionThrown
-                    .AddParams(configFile, ex);
-                Logger.Log(errorMessage);
+                await BundlerMinifierPackage.IsPackageInitialized;
 
-                var window = _dte.Windows.Item(EnvDTE.Constants.vsWindowKindOutput);
-                window.Activate();
-            }));
+                BundlerMinifierPackage._dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        var errorMessage = Resources.Text.ErrorExceptionThrown
+                            .AddParams(configFile, ex);
+                        Logger.Log(errorMessage);
+
+                        var window = _dte?.Windows?.Item(EnvDTE.Constants.vsWindowKindOutput);
+                        window?.Activate();
+                    }
+                    catch (Exception reportError)
+                    {
+                        System.Diagnostics.Debug.Write(reportError);
+                    }
+                }));
+            }
+            catch (Exception reportError)
+            {
+                System.Diagnostics.Debug.Write(reportError);
+            }
         }
 
         private static void CheckFileOutOfSourceControl(object sender, MinifyFileEventArgs e)
@@ -225,7 +251,7 @@ namespace BundlerMinifierVsix
             if (!e.Bundle.IncludeInProject)
                 return;
 
-            var item = _dte.Solution.FindProjectItem(e.Bundle.FileName);
+            var item = _dte?.Solution?.FindProjectItem(e.Bundle.FileName);
 
             if (item == null || item.ContainingProject == null)
                 return;
@@ -236,7 +262,7 @@ namespace BundlerMinifierVsix
 
         private static void AfterWritingSourceMap(object sender, MinifyFileEventArgs e)
         {
-            var item = _dte.Solution.FindProjectItem(e.OriginalFile);
+            var item = _dte?.Solution?.FindProjectItem(e.OriginalFile);
 
             if (item == null || item.ContainingProject == null)
                 return;
@@ -247,7 +273,8 @@ namespace BundlerMinifierVsix
         private static void ErrorMinifyingFile(object sender, MinifyFileEventArgs e)
         {
             ErrorListService.ProcessCompilerResults(e.Result);
-            BundlerMinifierPackage._dte.StatusBar.Text = Resources.Text.ErrorMinifying.AddParams(Path.GetFileName(e.OriginalFile));
+            if (_dte != null)
+                _dte.StatusBar.Text = Resources.Text.ErrorMinifying.AddParams(Path.GetFileName(e.OriginalFile));
         }
     }
 }
