@@ -13,6 +13,13 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 5.0.3
+
+- [x] Bundles changed or added in a config file are minified again when the config file
+  was invalid as it was opened, e.g. still in the 4.x format
+  - Once it is fixed, every bundle in it is minified again, as what its min files were made from is unknown
+  - A config file without any bundle yet, e.g. a layout with an empty `bundles`, tells the bundles added to it apart as well
+
 ## 5.0.2
 
 - [x] An invalid config file is now shown in the Error List
