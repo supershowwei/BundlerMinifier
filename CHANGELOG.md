@@ -13,6 +13,15 @@ download in the
 These are the changes to each version that has been released
 on the official Visual Studio extension gallery
 
+## 5.0.2
+
+- [x] An invalid config file is now shown in the Error List
+  - Its reason used to go only to the output window, without bringing up its pane, so it could not be seen
+  - The error navigates to the line in the config file, and the Error List is brought up the first time only
+  - The status bar says the config file is invalid
+  - The config file is checked as soon as it is opened in the editor, not only once it is saved
+  - The error is removed once the config file can be read again
+
 ## 5.0.1
 
 - [x] Republished 5.0 on top of 4.4.1; 5.0.0 was withdrawn as Visual Studio crashed
