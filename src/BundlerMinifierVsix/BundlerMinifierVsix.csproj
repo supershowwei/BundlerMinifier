@@ -161,7 +161,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" ExcludeAssets="runtime" />
     <PackageReference Include="NuGet.VisualStudio" Version="17.14.0" ExcludeAssets="runtime" />
     <!-- Not shipped by VS - must go into the VSIX. -->
-    <PackageReference Include="NUglify" Version="1.22.3" />
+    <PackageReference Include="NUglify" Version="1.24.0" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
