@@ -405,6 +405,83 @@ namespace BundlerMinifierTest
             Assert.IsTrue(File.ReadAllText("../../../artifacts/foo.min.js").StartsWith("var file1=1"));
         }
 
+        private static string NestedConfig(params string[] bundles)
+        {
+            return "[{ \"_site\": { \"preambles\": [\"file2.js\"], \"bundles\": [" + string.Join(",", bundles) + "] } }]";
+        }
+
+        [TestMethod]
+        public void MinifyNestedBundleWhenInputFilesChanged()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.js";
+            DateTime written = DateTime.UtcNow;
+
+            File.WriteAllText(config, NestedConfig("{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }"));
+            File.SetLastWriteTimeUtc(config, written);
+            BundleFileProcessor.TrackInputFiles(config);
+            _processor.Process(config);
+
+            File.WriteAllText(config, NestedConfig("{ \"outputFileName\": \"foo.js\", \"inputFiles\": [] }"));
+            File.SetLastWriteTimeUtc(config, written.AddSeconds(1));
+            _processor.Process(config);
+
+            Assert.IsFalse(File.ReadAllText(minFile).Contains("file1"), File.ReadAllText(minFile));
+        }
+
+        [TestMethod]
+        public void TrackConfigThatIsInvalidWhenOpened()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string jsMinFile = "../../../artifacts/foo.min.js";
+            string cssMinFile = "../../../artifacts/foo.min.css";
+            DateTime written = DateTime.UtcNow;
+            string error;
+
+            // opened while still in the 4.x format, its min file made from who knows what
+            File.WriteAllText(jsMinFile, "stale");
+            File.WriteAllText(config, "[{ \"outputFileName\": \"foo.js\", \"layout\": \"_site\", \"inputFiles\": [\"file1.js\"] }]");
+            File.SetLastWriteTimeUtc(config, written);
+            Assert.IsFalse(BundleFileProcessor.TrackInputFiles(config, out error));
+            StringAssert.Contains(error, "no longer supported");
+
+            // fixed: every bundle counts as added
+            File.WriteAllText(config, NestedConfig("{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }"));
+            File.SetLastWriteTimeUtc(config, written.AddSeconds(1));
+            _processor.Process(config);
+            Assert.IsTrue(File.ReadAllText(jsMinFile).StartsWith("var file2=2"), File.ReadAllText(jsMinFile));
+
+            // and a bundle put in the layout later is told apart
+            File.WriteAllText(cssMinFile, "stale");
+            File.WriteAllText(config, NestedConfig("{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }",
+                "{ \"outputFileName\": \"foo.css\", \"inputFiles\": [\"file1.css\"] }"));
+            File.SetLastWriteTimeUtc(config, written.AddSeconds(2));
+            _processor.Process(config);
+            Assert.IsTrue(File.ReadAllText(cssMinFile).StartsWith("body"), File.ReadAllText(cssMinFile));
+        }
+
+        [TestMethod]
+        public void MinifyBundleAddedToEmptyTrackedConfig()
+        {
+            string config = "../../../artifacts/" + _guid + ".json";
+            string minFile = "../../../artifacts/foo.min.js";
+            DateTime written = DateTime.UtcNow;
+            string error;
+
+            // a layout that has no bundle yet
+            File.WriteAllText(config, NestedConfig());
+            File.SetLastWriteTimeUtc(config, written);
+            Assert.IsTrue(BundleFileProcessor.TrackInputFiles(config, out error));
+            Assert.IsNull(error);
+
+            File.WriteAllText(minFile, "stale");
+            File.WriteAllText(config, NestedConfig("{ \"outputFileName\": \"foo.js\", \"inputFiles\": [\"file1.js\"] }"));
+            File.SetLastWriteTimeUtc(config, written.AddSeconds(1));
+            _processor.Process(config);
+
+            Assert.IsTrue(File.ReadAllText(minFile).StartsWith("var file2=2"), File.ReadAllText(minFile));
+        }
+
         private static void WriteConfig(string configFile, DateTime writeTime, params string[] inputFiles)
         {
             string inputs = string.Join(", ", inputFiles.Select(f => "\"" + f + "\""));

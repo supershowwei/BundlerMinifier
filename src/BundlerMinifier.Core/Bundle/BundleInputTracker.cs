@@ -144,27 +144,25 @@ namespace BundlerMinifier
         /// <summary>
         /// 把還沒有基準的 bundle 以目前的設定記為基準，已有基準的不覆寫。
         /// 傳入的必須是設定檔裡的全部 bundle，之後才出現的 bundle 會被視為新加入而判定為異動。
+        /// 設定檔一個 bundle 都沒有，或無效而讀不出 bundle 時傳入空集合：
+        /// 之後讀到的 bundle 都沒有基準，一律視為新加入，避免沿用不知道以什麼內容產生的 min 檔。
         /// </summary>
-        public static void Prime(IEnumerable<Bundle> bundles)
+        /// <param name="configFile">設定檔完整路徑。</param>
+        public static void Prime(string configFile, IEnumerable<Bundle> bundles)
         {
-            ConfigState state = null;
+            ConfigState state = GetState(configFile);
 
             foreach (Bundle bundle in bundles)
             {
                 if (bundle.ConfigWriteTicks == 0 || bundle.FileName == null || bundle.OutputFileName == null)
                     continue;
 
-                // 同一次讀出來的 bundle 都屬於同一個設定檔
-                if (state == null)
-                    state = GetState(bundle.FileName);
-
                 if (!state.Entries.ContainsKey(bundle.OutputFileName))
                     state.Entries.TryAdd(bundle.OutputFileName, NewEntry(bundle, bundle.ComputeInputFilesHash()));
             }
 
             // 全部記完才標記，避免其他執行緒把還沒記到的 bundle 誤判為新加入
-            if (state != null)
-                state.Primed = true;
+            state.Primed = true;
         }
 
         private static Entry NewEntry(Bundle bundle, ulong hash)

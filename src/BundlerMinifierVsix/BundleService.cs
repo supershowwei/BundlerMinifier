@@ -140,17 +140,16 @@ namespace BundlerMinifierVsix
             {
                 try
                 {
-                    // opening an invalid config file says why right away, not only once it is saved
-                    IEnumerable<Bundle> bundles;
+                    // an invalid config file is tracked too, so that once it is fixed the bundles changed
+                    // or added in it are told apart; opening it says why it is invalid right away
                     string error;
 
-                    if (!BundleHandler.TryGetBundles(configFile, out bundles, out error) && bundles == null)
+                    if (!BundleFileProcessor.TrackInputFiles(configFile, out error) && error != null)
                     {
                         RunOnUIThread(() => ReportInvalidConfigFile(configFile, error));
                         return;
                     }
 
-                    BundleFileProcessor.TrackInputFiles(configFile);
                     ConfigFileRead(configFile);
                 }
                 catch (Exception ex)

@@ -29,7 +29,7 @@ namespace BundlerMinifier
             }
 
             // the baseline a later config change is compared against
-            BundleInputTracker.Prime(bundles);
+            BundleInputTracker.Prime(new FileInfo(configPath).FullName, bundles);
 
             if (configurations.Count > 0)
             {

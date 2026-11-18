@@ -167,10 +167,25 @@ namespace BundlerMinifier
         /// </summary>
         public static void TrackInputFiles(string configFile)
         {
-            IEnumerable<Bundle> bundles;
+            string error;
+            TrackInputFiles(configFile, out error);
+        }
 
-            if (BundleHandler.TryGetBundles(configFile, out bundles))
-                BundleInputTracker.Prime(bundles);
+        /// <summary>
+        /// Same as <see cref="TrackInputFiles(string)"/>. An invalid config file is tracked as well, as one without
+        /// any bundle: what its min files were made from is unknown, so once it is fixed every bundle counts as added.
+        /// </summary>
+        /// <param name="error">Why the config file could not be read, null otherwise.</param>
+        /// <returns>False when the config file is invalid or there is no such file.</returns>
+        public static bool TrackInputFiles(string configFile, out string error)
+        {
+            IEnumerable<Bundle> bundles;
+            bool read = BundleHandler.TryGetBundles(configFile, out bundles, out error);
+
+            if (read || bundles == null)
+                BundleInputTracker.Prime(new FileInfo(configFile).FullName, bundles ?? Enumerable.Empty<Bundle>());
+
+            return read;
         }
 
         public static IEnumerable<Bundle> IsFileConfigured(string configFile, string sourceFile)
